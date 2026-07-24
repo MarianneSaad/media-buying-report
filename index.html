@@ -202,12 +202,7 @@
 
 <footer class="site">
   <div class="gradient-edge-card flip">
-    <div class="inner">
-      <div class="brand-row" style="justify-content:center; padding:14px;">
-        <span class="bars-icon"><span></span><span></span><span></span><span></span></span>
-        <span class="brand-text" style="font-size:16px">Inspired Creative Solutions</span>
-      </div>
-    </div>
+    <div class="inner" style="height:18px"></div>
   </div>
 </footer>
 
@@ -225,6 +220,14 @@
   const refreshBtn = document.getElementById("refreshBtn");
 
   const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  // Every Media Buying tracker list is named "<Month> <Year>_Tracker" — the calendar coverage is
+  // known up front from the list names themselves, so the Year/Month/Week pickers don't need to
+  // wait on the ClickUp fetch to populate. This mirrors LISTS in api/report.js.
+  const PERIODS = [];
+  for(let m=3;m<=12;m++) PERIODS.push({year:2024, month:m});
+  for(let m=1;m<=12;m++) PERIODS.push({year:2025, month:m});
+  for(let m=1;m<=7;m++) PERIODS.push({year:2026, month:m});
 
   function fmtMoney(n){
     if(n === null || n === undefined || !isFinite(n)) return "—";
@@ -313,10 +316,12 @@
   }
 
   function getMonthEntry(year, month){
+    if(!state.data) return null;
     return state.data.months.find(m=>m.year===year && m.month===month) || null;
   }
 
   function cumulativeAvgUOSpend(uptoYear, uptoMonth){
+    if(!state.data) return null;
     // Running average of each period's overall Avg U/O Spend, across all months up to and including the one given.
     const months = state.data.months.filter(m => (m.year < uptoYear) || (m.year===uptoYear && m.month<=uptoMonth));
     if(!months.length) return null;
@@ -440,13 +445,13 @@
   }
 
   function populateSelectors(){
-    const years = [...new Set(state.data.months.map(m=>m.year))].sort();
+    const years = [...new Set(PERIODS.map(p=>p.year))].sort();
     yearSelect.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join("");
     state.year = years[years.length-1];
     yearSelect.value = state.year;
 
     function monthsForYear(y){
-      return state.data.months.filter(m=>m.year===y).map(m=>m.month).sort((a,b)=>a-b);
+      return PERIODS.filter(p=>p.year===y).map(p=>p.month).sort((a,b)=>a-b);
     }
     function refreshMonthOptions(){
       const months = monthsForYear(state.year);
@@ -494,13 +499,15 @@
       const json = await resp.json();
       if(!resp.ok) throw new Error(json.error || "Failed to load report");
       state.data = json;
-      populateSelectors();
       render();
     }catch(err){
       contentEl.innerHTML = `<div class="error">Couldn't load data: ${err.message}</div>`;
     }
   }
 
+  // Populate the pickers immediately from the known calendar coverage — no need to
+  // wait on the live ClickUp fetch just to browse periods.
+  populateSelectors();
   refreshBtn.addEventListener("click", load);
   load();
 })();
