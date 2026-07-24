@@ -206,6 +206,9 @@
   .trend-table tr.row-latest{background:var(--card);}
   .trend-table tr.row-latest td:first-child{font-weight:800;}
   .latest-pill{font-size:9.5px; font-weight:800; color:var(--purple); background:#f1e6f5; border-radius:100px; padding:2px 8px; margin-left:8px; text-transform:uppercase; letter-spacing:.3px;}
+  .ov-num-clickable{cursor:pointer;}
+  .ov-num-clickable:hover span{text-decoration:underline;}
+  .overview-drill-row td{padding:0;}
 
   /* ---------- Snapshot: health bar + top movers ---------- */
   .health-bar{display:flex; height:16px; border-radius:100px; overflow:hidden; background:var(--border); margin:20px 0 12px 0;}
@@ -345,7 +348,8 @@
     clientPeriod: "year", selectedClientGroup: null, clientBrandFilter: null,
     drillStatus: null, lastRows: [],
     assigneePeriod: null, drillAssignee: null, assigneeGranularity: "month", assigneeWeek: 5,
-    overviewSort: { key: "period", dir: "desc" }, expandedClientGroups: new Set() };
+    overviewSort: { key: "period", dir: "desc" }, expandedClientGroups: new Set(), overviewDrill: null,
+    assigneeGroupBy: "assignee", drillClient: null };
 
   const contentEl = document.getElementById("content");
   const selectorPool = document.getElementById("selectorPool");
@@ -851,10 +855,13 @@
     contentEl.innerHTML = `
       <div class="section-title">Snapshot <span class="pill">${MONTH_NAMES[m.month]} ${m.year} — most recent period</span></div>
       <div class="health-bar">
-        ${stats.overCount ? `<div class="seg over" style="width:${overPct}%"></div>` : ""}
-        ${stats.underCount ? `<div class="seg under" style="width:${underPct}%"></div>` : ""}
-        ${stats.targetCount ? `<div class="seg target" style="width:${targetPct}%"></div>` : ""}
+        ${stats.overCount ? `<div class="seg over" style="width:${Math.max(overPct,2.5)}%" title="${stats.overCount} Overspend"></div>` : ""}
+        ${stats.underCount ? `<div class="seg under" style="width:${Math.max(underPct,2.5)}%" title="${stats.underCount} Underspend"></div>` : ""}
+        ${stats.targetCount ? `<div class="seg target" style="width:${Math.max(targetPct,2.5)}%" title="${stats.targetCount} On Target"></div>` : ""}
       </div>
+      ${stats.targetCount ? `<div style="display:flex; justify-content:flex-end; margin:-6px 0 10px 0;">
+        <span style="font-size:11px; font-weight:800; color:var(--green); background:#e2f6ee; border-radius:100px; padding:3px 10px;">▲ ${stats.targetCount} On Target</span>
+      </div>` : ""}
       <div class="health-legend">
         <span><i class="dot over"></i>${stats.overCount} Overspend</span>
         <span><i class="dot under"></i>${stats.underCount} Underspend</span>
@@ -877,6 +884,32 @@
   // ---------- Overview: all-time trend across every period, one row per month, color-coded,
   // sortable by any column (defaults to descending whenever you switch columns), with a
   // snapshot bar up top showing the latest period at a glance. ----------
+  // Inline drop-down (matching renderDrillPanel's look) shown directly under one Overview trend
+  // row when its Overspend/Underspend/On Target count is clicked — lists the brands that made up
+  // that count for that specific period.
+  function renderOverviewDrillRow(year, month, status, colspan){
+    const m = state.data.months.find(x=>x.year===year && x.month===month);
+    const rows = m ? aggregateBrands([m], state.tolerance).filter(r=>r.status===status) : [];
+    return `<tr class="overview-drill-row">
+      <td colspan="${colspan}">
+        <div class="drill-panel" style="margin:6px 0;">
+          <div class="drill-head">
+            <span>${MONTH_NAMES[month]} ${year} — ${status} — ${rows.length} brand${rows.length===1?"":"s"}</span>
+            <span class="drill-close" data-drill-close="overview">Close ✕</span>
+          </div>
+          ${rows.length ? `<table class="nowrap-cells">
+            <thead><tr><th>Brand</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th></tr></thead>
+            <tbody>${rows.map(r=>`<tr>
+              <td class="brand-name">${r.name}</td>
+              <td class="num-cell">${fmtMoney(r.uoSpend)}</td>
+              <td class="num-cell">${fmtPct(r.usagePct)}</td>
+            </tr>`).join("")}</tbody>
+          </table>` : `<div class="empty">No brands in this category.</div>`}
+        </div>
+      </td>
+    </tr>`;
+  }
+
   const OVERVIEW_COLUMNS = {
     period:   { label:"Period",     get:p=>p.year*100+p.month },
     brands:   { label:"Brands",     get:p=>p.brandCount },
@@ -940,14 +973,18 @@
           ${th("avguo","num-cell")}
         </tr></thead>
         <tbody>
-          ${sorted.map(p=>`<tr class="${p.isLatest?"row-latest":""}">
-            <td class="brand-name">${p.label}${p.isLatest?`<span class="latest-pill">Latest</span>`:""}</td>
-            <td class="num-cell">${p.brandCount}</td>
-            <td class="num-cell"><span class="${p.overCount>0?"text-over":"text-zero"}">${p.overCount}</span></td>
-            <td class="num-cell"><span class="${p.underCount>0?"text-under":"text-zero"}">${p.underCount}</span></td>
-            <td class="num-cell"><span class="${p.targetCount>0?"text-target":"text-zero"}">${p.targetCount}</span></td>
-            <td class="num-cell"><span class="${p.avgUOSpend===null?"":(p.avgUOSpend>=0?"text-target":"text-over")}">${fmtMoney(p.avgUOSpend)}</span></td>
-          </tr>`).join("")}
+          ${sorted.map(p=>{
+            const row = `<tr class="${p.isLatest?"row-latest":""}">
+              <td class="brand-name">${p.label}${p.isLatest?`<span class="latest-pill">Latest</span>`:""}</td>
+              <td class="num-cell">${p.brandCount}</td>
+              <td class="num-cell ov-num-clickable" data-ov-year="${p.year}" data-ov-month="${p.month}" data-ov-status="Overspend" title="Click to view brands"><span class="${p.overCount>0?"text-over":"text-zero"}">${p.overCount}</span></td>
+              <td class="num-cell ov-num-clickable" data-ov-year="${p.year}" data-ov-month="${p.month}" data-ov-status="Underspend" title="Click to view brands"><span class="${p.underCount>0?"text-under":"text-zero"}">${p.underCount}</span></td>
+              <td class="num-cell ov-num-clickable" data-ov-year="${p.year}" data-ov-month="${p.month}" data-ov-status="On Target" title="Click to view brands"><span class="${p.targetCount>0?"text-target":"text-zero"}">${p.targetCount}</span></td>
+              <td class="num-cell"><span class="${p.avgUOSpend===null?"":(p.avgUOSpend>=0?"text-target":"text-over")}">${fmtMoney(p.avgUOSpend)}</span></td>
+            </tr>`;
+            const drilled = state.overviewDrill && state.overviewDrill.year===p.year && state.overviewDrill.month===p.month;
+            return row + (drilled ? renderOverviewDrillRow(p.year, p.month, state.overviewDrill.status, 6) : "");
+          }).join("")}
         </tbody>
       </table>
     `;
@@ -1019,10 +1056,15 @@
   // (e.g. all 18 Trade Kings brands roll up to client "Trade Kings"; "Access Bank" + its
   // Linkedin/W Community channel lines all roll up to client "Access Bank"). Single-brand clients
   // just show that one brand as their whole total.
+  // These clients still count fully toward every all-brand total (Report, Overview, Snapshot,
+  // By Assignee all keep including their spend) — they're just kept out of the By Client page's
+  // own selectable list/dropdown, so they don't show up individually there.
+  const HIDDEN_CLIENT_NAMES = new Set(["Yoyo Foods", "Enda", "Crunchy King"]);
   function allClientGroupNames(){
     if(!state.data) return [];
     const set = new Set();
     state.data.months.forEach(m=>m.brands.forEach(b=>set.add(b.client || b.name)));
+    HIDDEN_CLIENT_NAMES.forEach(n=>set.delete(n));
     return [...set].sort();
   }
   function currentClientEntityNames(){
@@ -1199,11 +1241,29 @@
         byAssignee.get(name).push(r);
       }
     }
-    const summary = [...byAssignee.entries()].map(([name, clients])=>{
-      const s = statsOf(clients);
-      return { name, clients, clientCount: clients.length, ...s };
-    }).sort((a,b)=> b.clientCount - a.clientCount);
+    // Each entry in `rowsForPerson` is one brand-level row for that period — so counting the
+    // array length gives brands, not clients. Distinct clients need de-duping by r.client.
+    const summary = [...byAssignee.entries()].map(([name, rowsForPerson])=>{
+      const s = statsOf(rowsForPerson);
+      const clientCount = new Set(rowsForPerson.map(r=>r.client||r.name)).size;
+      return { name, clients: rowsForPerson, clientCount, brandCount: rowsForPerson.length, ...s };
+    }).sort((a,b)=> b.brandCount - a.brandCount);
+    // Custom priority ordering on top of the default busiest-first sort: Kataka always first,
+    // Chewe/Conard/Precious always last (in that order), everyone else keeps busiest-first order.
+    const ASSIGNEE_SORT_TOP = ["kataka"];
+    const ASSIGNEE_SORT_BOTTOM = ["chewe", "conard", "precious"];
+    summary.sort((a,b)=>{
+      const an = firstName(a.name).toLowerCase(), bn = firstName(b.name).toLowerCase();
+      const aTop = ASSIGNEE_SORT_TOP.includes(an) ? 0 : 1, bTop = ASSIGNEE_SORT_TOP.includes(bn) ? 0 : 1;
+      if(aTop !== bTop) return aTop - bTop;
+      const aBotIdx = ASSIGNEE_SORT_BOTTOM.indexOf(an), bBotIdx = ASSIGNEE_SORT_BOTTOM.indexOf(bn);
+      const aBot = aBotIdx === -1 ? 0 : 1, bBot = bBotIdx === -1 ? 0 : 1;
+      if(aBot !== bBot) return aBot - bBot;
+      if(aBot === 1 && bBot === 1) return aBotIdx - bBotIdx;
+      return 0; // preserve existing busiest-first order within the middle group
+    });
 
+    const groupBy = state.assigneeGroupBy || "assignee";
     state.lastRows = rows;
     contentEl.innerHTML = `
       <div class="section-title" style="margin-top:2px">By Assignee</div>
@@ -1220,9 +1280,12 @@
             <option value="4" ${week===4?"selected":""}>Week 4</option>
             <option value="5" ${week===5?"selected":""}>Week 5</option>
           </select>
+        <span class="field-label" style="margin-left:14px;">Group</span>
+        <button class="pill-btn ${groupBy==="assignee"?"active":""}" data-assigneegroupby="assignee">By Assignee</button>
+        <button class="pill-btn ${groupBy==="client"?"active":""}" data-assigneegroupby="client">By Client</button>
         <span class="period-pill">${periodLabel} · across all clients this period</span>
       </div>
-      ${renderAssigneeSnapshot(summary, overallStats, rows)}
+      ${groupBy==="client" ? renderAssigneeByClient(rows, overallStats) : renderAssigneeSnapshot(summary, overallStats, rows)}
     `;
     document.getElementById("assigneeMonthSelect").addEventListener("change", (e)=>{
       state.assigneePeriod = e.target.value;
@@ -1253,14 +1316,15 @@
   }
   function renderAssigneeSnapshot(summary, overallStats, rows){
     const totalAssignees = summary.length;
-    const totalClients = rows.length;
-    const busiest = summary.length ? summary.reduce((a,b)=> b.clientCount>a.clientCount ? b : a) : null;
+    const totalClients = new Set(rows.map(r=>r.client||r.name)).size;
+    const totalBrands = rows.length;
+    const busiest = summary.length ? summary.reduce((a,b)=> b.brandCount>a.brandCount ? b : a) : null;
     const avgPerAssignee = totalAssignees ? (summary.reduce((a,s)=>a+s.clientCount,0)/totalAssignees) : null;
     return `
       <div class="assignee-kpi-line">
         <div class="akpi-chip"><b style="color:var(--purple)">${totalAssignees}</b>Assignees</div>
-        <div class="akpi-chip"><b style="color:var(--pink)">${totalClients}</b>Clients Covered</div>
-        <div class="akpi-chip"><b style="color:var(--orange)">${busiest ? firstName(busiest.name) : "—"}</b>Busiest${busiest ? " · "+busiest.clientCount+" clients" : ""}</div>
+        <div class="akpi-chip"><b style="color:var(--pink)">${totalClients} clients</b>${totalBrands} brands</div>
+        <div class="akpi-chip"><b style="color:var(--orange)">${busiest ? firstName(busiest.name) : "—"}</b>Busiest${busiest ? " · "+busiest.clientCount+" clients · "+busiest.brandCount+" brands" : ""}</div>
         <div class="akpi-chip"><b style="color:var(--teal)">${avgPerAssignee===null?"—":avgPerAssignee.toFixed(1)}</b>Avg Clients / Assignee</div>
       </div>
       <div class="assignee-kpi-line" style="margin:14px 0 22px 0;">
@@ -1280,7 +1344,7 @@
           <div class="assignee-name-card${isActive?" active":""}" data-assignee="${s.name}">
             <div class="an-name" style="color:${color}">${firstName(s.name)}</div>
             <div class="an-side">
-              <div class="an-count">${s.clientCount} client${s.clientCount===1?"":"s"}</div>
+              <div class="an-count">${s.clientCount} client${s.clientCount===1?"":"s"} · ${s.brandCount} brand${s.brandCount===1?"":"s"}</div>
               <div class="an-mix">
                 <span class="${s.overCount>0?"text-over":"text-zero"}">${s.overCount} over</span>
                 <span class="${s.underCount>0?"text-under":"text-zero"}">${s.underCount} under</span>
@@ -1292,6 +1356,76 @@
         }).join("")}
       </div>
     `;
+  }
+
+  // ---------- By Assignee page's alternate "Group: By Client" view — same period's rows, but
+  // rolled up by client instead of by person, so you can see who covers each client at a glance
+  // and expand a client to see its brand-level assignee breakdown. ----------
+  function renderAssigneeByClient(rows, overallStats){
+    const groups = groupRowsByClient(rows, state.tolerance).sort((a,b)=> b.brands.length - a.brands.length || a.client.localeCompare(b.client));
+    const totalClients = groups.length;
+    const totalBrands = rows.length;
+    const assigneesInvolved = new Set();
+    groups.forEach(g=>(g.assignees||[]).forEach(a=>assigneesInvolved.add(a)));
+    const busiestClient = groups.length ? groups.reduce((a,b)=> b.brands.length>a.brands.length ? b : a) : null;
+    const avgBrandsPerClient = totalClients ? (totalBrands/totalClients) : null;
+    return `
+      <div class="assignee-kpi-line">
+        <div class="akpi-chip"><b style="color:var(--purple)">${totalClients} clients</b>${totalBrands} brands</div>
+        <div class="akpi-chip"><b style="color:var(--pink)">${assigneesInvolved.size}</b>Assignees Involved</div>
+        <div class="akpi-chip"><b style="color:var(--orange)">${busiestClient ? busiestClient.client : "—"}</b>Most Brands${busiestClient ? " · "+busiestClient.brands.length+" brands" : ""}</div>
+        <div class="akpi-chip"><b style="color:var(--teal)">${avgBrandsPerClient===null?"—":avgBrandsPerClient.toFixed(1)}</b>Avg Brands / Client</div>
+      </div>
+      <div class="assignee-kpi-line" style="margin:14px 0 22px 0;">
+        <div class="akpi-chip"><b class="text-over">${overallStats.overCount}</b>Overspend</div>
+        <div class="akpi-chip"><b class="text-under">${overallStats.underCount}</b>Underspend</div>
+        <div class="akpi-chip"><b class="text-target">${overallStats.targetCount}</b>On Target</div>
+        <div class="akpi-chip">Avg Overspend: <b class="text-over">${fmtMoney(overallStats.avgOverspend)}</b></div>
+        <div class="akpi-chip">Avg Underspend: <b class="text-under">${fmtMoney(overallStats.avgUnderspend)}</b></div>
+        <div class="akpi-chip">Avg On Target: <b class="text-target">${fmtMoney(overallStats.avgOnTarget)}</b></div>
+      </div>
+      <div class="section-title" style="margin:0 0 12px 0; text-align:center;">Clients <span class="pill">click a client to see who's assigned</span></div>
+      <div class="assignee-namelist">
+        ${groups.map((g,i)=>{
+          const color = AVATAR_COLORS[i%AVATAR_COLORS.length];
+          const isActive = state.drillClient === g.client;
+          const overC = g.brands.filter(b=>b.status==="Overspend").length;
+          const underC = g.brands.filter(b=>b.status==="Underspend").length;
+          const targetC = g.brands.filter(b=>b.status==="On Target").length;
+          const assigneeLabel = g.assignees.length ? g.assignees.map(firstName).join(", ") : "Unassigned";
+          return `
+          <div class="assignee-name-card${isActive?" active":""}" data-clientdrill="${g.client}">
+            <div class="an-name" style="color:${color}">${g.client}</div>
+            <div class="an-side">
+              <div class="an-count">${g.brands.length} brand${g.brands.length===1?"":"s"} · ${assigneeLabel}</div>
+              <div class="an-mix">
+                <span class="${overC>0?"text-over":"text-zero"}">${overC} over</span>
+                <span class="${underC>0?"text-under":"text-zero"}">${underC} under</span>
+                <span class="${targetC>0?"text-target":"text-zero"}">${targetC} target</span>
+              </div>
+            </div>
+          </div>
+          ${isActive ? `<div class="assignee-drill-wrap">${renderClientAssigneeDrill(g)}</div>` : ""}`;
+        }).join("")}
+      </div>
+    `;
+  }
+  function renderClientAssigneeDrill(g){
+    return `<div class="drill-panel" style="margin:8px 0;">
+      <div class="drill-head"><span>${g.client} — ${g.brands.length} brand${g.brands.length===1?"":"s"}</span></div>
+      <table class="nowrap-cells">
+        <thead><tr><th>Brand</th><th>Assignee</th><th class="num-cell">Approved</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
+        <tbody>${g.brands.map(b=>`<tr>
+          <td class="brand-name">${b.name}</td>
+          <td>${(b.assignees && b.assignees.length) ? b.assignees.join(", ") : "—"}</td>
+          <td class="num-cell">${fmtMoney(b.approved)}</td>
+          <td class="num-cell">${fmtMoney(b.actual)}</td>
+          <td class="num-cell"><span class="${b.status==="Overspend"?"text-over":b.status==="Underspend"?"text-under":"text-target"}">${fmtMoney(b.uoSpend)}</span></td>
+          <td class="num-cell">${fmtPct(b.usagePct)}</td>
+          <td><span class="badge ${badgeClass(b.status)}">${b.status}</span></td>
+        </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
   }
   function renderAssigneeDrillRow(c, nested){
     return `<tr class="${nested?"brand-subrow":""}">
@@ -1385,7 +1519,21 @@
   // the Report page's own Year/Month/Week toggle, and the By Client sub-nav.
   contentEl.addEventListener("click", (e)=>{
     const closeBtn = e.target.closest("[data-drill-close]");
-    if(closeBtn){ state.drillStatus = null; render(); return; }
+    if(closeBtn){
+      if(closeBtn.dataset.drillClose === "overview") state.overviewDrill = null;
+      else state.drillStatus = null;
+      render();
+      return;
+    }
+
+    const ovNum = e.target.closest("td.ov-num-clickable");
+    if(ovNum){
+      const year = Number(ovNum.dataset.ovYear), month = Number(ovNum.dataset.ovMonth), status = ovNum.dataset.ovStatus;
+      const same = state.overviewDrill && state.overviewDrill.year===year && state.overviewDrill.month===month && state.overviewDrill.status===status;
+      state.overviewDrill = same ? null : { year, month, status };
+      render();
+      return;
+    }
 
     const statCard = e.target.closest(".stat-card[data-status]");
     if(statCard){
@@ -1414,6 +1562,23 @@
     if(assigneeSubBtn){
       state.assigneeGranularity = assigneeSubBtn.dataset.assigneeperiod;
       state.drillAssignee = null;
+      render();
+      return;
+    }
+
+    const assigneeGroupByBtn = e.target.closest(".control-row button[data-assigneegroupby]");
+    if(assigneeGroupByBtn){
+      state.assigneeGroupBy = assigneeGroupByBtn.dataset.assigneegroupby;
+      state.drillAssignee = null;
+      state.drillClient = null;
+      render();
+      return;
+    }
+
+    const clientDrillRow = e.target.closest(".assignee-name-card[data-clientdrill]");
+    if(clientDrillRow){
+      const client = clientDrillRow.dataset.clientdrill;
+      state.drillClient = (state.drillClient === client) ? null : client;
       render();
       return;
     }
