@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Media buying spend pacing report" />
+<title>Inspired Africa | Giraffe Creatives — Media Buying Report</title>
+<style>
+  :root{
+    --ink:#22223b;
+    --muted:#7a7f8d;
+    --purple:#701888;
+    --pink:#c02088;
+    --orange:#f89000;
+    --red:#f84018;
+    --teal:#48b8c8;
+    --bg:#ffffff;
+    --card:#f8f8fb;
+    --border:#eceef2;
+    --green:#1a9c6d;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:var(--bg);
+  }
+  a{color:inherit}
+
+  /* ---------- Header ---------- */
+  header.site{
+    border-bottom:1px solid var(--border);
+    padding:22px 32px 0 32px;
+  }
+  .header-top{
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+    padding-bottom:18px;
+  }
+  .logo-row{display:flex; align-items:center; gap:18px;}
+  .logo-row img{height:56px; display:block;}
+  .contact-block{
+    display:flex; gap:22px; flex-wrap:wrap; color:var(--muted); font-size:13px; line-height:1.5;
+  }
+  .contact-block b{color:var(--ink); font-weight:700;}
+  .contact-sep{width:1px; background:var(--teal); align-self:stretch; opacity:.5;}
+
+  .title-row{
+    background:linear-gradient(90deg,var(--purple),var(--pink) 35%,var(--orange) 68%,var(--red) 100%);
+    color:#fff; border-radius:14px 14px 0 0; margin-top:4px;
+    padding:18px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  }
+  .title-row h1{font-size:22px; margin:0; font-weight:800; letter-spacing:.2px;}
+  .title-row .sub{font-size:12.5px; opacity:.92; margin-top:2px;}
+
+  nav.tabs{
+    display:flex; gap:6px; background:#fff; border:1px solid var(--border); border-top:none;
+    border-radius:0 0 14px 14px; padding:10px 14px; margin-bottom:0;
+  }
+  nav.tabs button{
+    border:none; background:transparent; color:var(--muted); font-weight:700; font-size:13.5px;
+    padding:8px 16px; border-radius:9px; cursor:pointer; transition:.15s;
+  }
+  nav.tabs button.active{background:var(--ink); color:#fff;}
+  nav.tabs button:hover:not(.active){background:var(--card);}
+
+  /* ---------- Controls ---------- */
+  .controls{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:20px 32px 0 32px;
+  }
+  .controls select, .controls input{
+    border:1px solid var(--border); border-radius:9px; padding:9px 12px; font-size:13.5px; color:var(--ink);
+    background:#fff; font-weight:600;
+  }
+  .controls label{font-size:12.5px; color:var(--muted); font-weight:700; display:flex; align-items:center; gap:8px;}
+  .refresh-btn{
+    margin-left:auto; border:1px solid var(--border); background:#fff; border-radius:9px; padding:9px 16px;
+    font-weight:700; font-size:13px; cursor:pointer; color:var(--ink);
+  }
+  .refresh-btn:hover{background:var(--card);}
+  .updated-at{font-size:11.5px; color:var(--muted);}
+
+  main{padding:20px 32px 48px 32px;}
+
+  /* ---------- Stat cards ---------- */
+  .stat-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin:18px 0 26px 0;
+  }
+  .stat-card{
+    background:var(--card); border-radius:12px; padding:16px 18px; border-left:5px solid var(--purple);
+  }
+  .stat-card .num{font-size:26px; font-weight:800; line-height:1.1;}
+  .stat-card .lbl{font-size:12px; color:var(--muted); font-weight:700; margin-top:4px; text-transform:uppercase; letter-spacing:.3px;}
+  .stat-card.c1{border-color:var(--purple);}
+  .stat-card.c2{border-color:var(--pink);}
+  .stat-card.c3{border-color:var(--orange);}
+  .stat-card.c4{border-color:var(--red);}
+  .stat-card.c5{border-color:var(--teal);}
+  .stat-card .num.over{color:var(--red);}
+  .stat-card .num.under{color:var(--orange);}
+  .stat-card .num.target{color:var(--green);}
+
+  .section-title{font-size:15px; font-weight:800; margin:26px 0 10px 0; display:flex; align-items:center; gap:10px;}
+  .section-title .pill{
+    font-size:11px; font-weight:700; color:var(--muted); background:var(--card); border-radius:100px; padding:3px 10px;
+  }
+
+  /* ---------- Quarter compare ---------- */
+  .quarter-compare{
+    display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:26px;
+  }
+  .qcard{border:1px solid var(--border); border-radius:12px; padding:16px 18px;}
+  .qcard h3{margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted);}
+  .qcard .row{display:flex; justify-content:space-between; font-size:13.5px; padding:5px 0; border-bottom:1px dashed var(--border);}
+  .qcard .row:last-child{border-bottom:none;}
+  .qcard .row b{font-weight:800;}
+
+  /* ---------- Table ---------- */
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  thead th{
+    text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted);
+    padding:10px 12px; border-bottom:2px solid var(--border);
+  }
+  tbody td{padding:11px 12px; border-bottom:1px solid var(--border);}
+  tbody tr:hover{background:var(--card);}
+  .badge{
+    display:inline-block; padding:3px 10px; border-radius:100px; font-size:11.5px; font-weight:800;
+  }
+  .badge.over{background:#fde8e2; color:var(--red);}
+  .badge.under{background:#fff1dc; color:#b06a00;}
+  .badge.target{background:#e2f6ee; color:var(--green);}
+  .num-cell{font-variant-numeric:tabular-nums; text-align:right;}
+  .brand-name{font-weight:700;}
+
+  .empty, .loading, .error{padding:40px; text-align:center; color:var(--muted); font-size:14px;}
+  .error{color:var(--red); font-weight:700;}
+
+  /* ---------- Footer ---------- */
+  footer.site{
+    border-top:1px solid var(--border); margin-top:20px; padding:22px 32px; color:var(--muted); font-size:12.5px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;
+  }
+  footer.site .contact-block{font-size:12.5px;}
+  footer.site .copyright{font-size:11.5px;}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="header-top">
+    <div class="logo-row">
+      <img src="/logo.png" alt="Giraffe Creatives" />
+    </div>
+    <div class="contact-block">
+      <div><b>t.</b> +260 211 272935<br/><b>m.</b> +260 962 221222</div>
+      <div class="contact-sep"></div>
+      <div>info@giraffecreatives.com<br/>www.giraffecreatives.com</div>
+      <div class="contact-sep"></div>
+      <div>401 A, St Bonaventure<br/>Lusaka, Zambia</div>
+    </div>
+  </div>
+  <div class="title-row">
+    <div>
+      <h1>Media Buying — Spend Pacing Report</h1>
+      <div class="sub">Approved budget vs. actual spend across all Inspired Creative Solutions media buying brands</div>
+    </div>
+  </div>
+  <nav class="tabs" id="periodTabs">
+    <button data-period="year" class="active">Year</button>
+    <button data-period="month">Month</button>
+    <button data-period="week">Week</button>
+  </nav>
+</header>
+
+<div class="controls">
+  <label>Year
+    <select id="yearSelect"></select>
+  </label>
+  <label id="monthWrap" style="display:none">Month
+    <select id="monthSelect"></select>
+  </label>
+  <label id="weekWrap" style="display:none">Week
+    <select id="weekSelect">
+      <option value="1">Week 1</option>
+      <option value="2">Week 2</option>
+      <option value="3">Week 3</option>
+      <option value="4">Week 4</option>
+      <option value="5" selected>Week 5 (full month)</option>
+    </select>
+  </label>
+  <label>On-target tolerance
+    <input id="tolerance" type="number" min="0" max="50" step="1" value="5" style="width:64px" /> %
+  </label>
+  <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+</div>
+
+<main>
+  <div id="content" class="loading">Loading live data from ClickUp…</div>
+</main>
+
+<footer class="site">
+  <div class="contact-block">
+    <div><b>t.</b> +260 211 272935 &nbsp;|&nbsp; <b>m.</b> +260 962 221222</div>
+    <div>info@giraffecreatives.com &nbsp;|&nbsp; www.giraffecreatives.com</div>
+    <div>401 A, St Bonaventure, Lusaka, Zambia</div>
+  </div>
+  <div class="copyright">Inspired Creative Solutions · Media Buying Report</div>
+</footer>
+
+<script>
+(function(){
+  const state = { period: "year", data: null, year: null, month: null, week: 5, tolerance: 5 };
+
+  const contentEl = document.getElementById("content");
+  const yearSelect = document.getElementById("yearSelect");
+  const monthSelect = document.getElementById("monthSelect");
+  const weekSelect = document.getElementById("weekSelect");
+  const monthWrap = document.getElementById("monthWrap");
+  const weekWrap = document.getElementById("weekWrap");
+  const toleranceInput = document.getElementById("tolerance");
+  const refreshBtn = document.getElementById("refreshBtn");
+
+  const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  function fmtMoney(n){
+    if(n === null || n === undefined || !isFinite(n)) return "—";
+    const sign = n < 0 ? "-" : "";
+    return sign + "$" + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  }
+  function fmtPct(n){
+    if(n === null || n === undefined || !isFinite(n)) return "—";
+    return n.toFixed(1) + "%";
+  }
+
+  function classify(usagePct, tolerance){
+    if(usagePct === null || usagePct === undefined || !isFinite(usagePct)) return "n/a";
+    if(usagePct > 100 + tolerance) return "Overspend";
+    if(usagePct < 100 - tolerance) return "Underspend";
+    return "On Target";
+  }
+
+  function badgeClass(status){
+    if(status === "Overspend") return "over";
+    if(status === "Underspend") return "under";
+    if(status === "On Target") return "target";
+    return "";
+  }
+
+  // Build per-brand rows (approved, actual, uoSpend, usagePct, status) for a set of month entries,
+  // aggregated together (summed) — used for Year view and for pooling a quarter.
+  function aggregateBrands(monthEntries, tolerance){
+    const map = new Map();
+    for(const m of monthEntries){
+      for(const b of m.brands){
+        if(!map.has(b.name)) map.set(b.name, {name:b.name, approved:0, actual:0});
+        const agg = map.get(b.name);
+        agg.approved += b.approved;
+        agg.actual += b.actual;
+      }
+    }
+    const rows = [...map.values()].map(r=>{
+      const uoSpend = r.approved - r.actual;
+      const usagePct = r.approved > 0 ? (r.actual / r.approved * 100) : (r.actual > 0 ? Infinity : null);
+      const status = classify(usagePct, tolerance);
+      return {...r, uoSpend, usagePct, status};
+    });
+    rows.sort((a,b)=> a.name.localeCompare(b.name));
+    return rows;
+  }
+
+  // Week view: cumulative spend through week N vs prorated target.
+  function weekBrands(monthEntry, week, tolerance){
+    if(!monthEntry) return [];
+    const rows = monthEntry.brands.map(b=>{
+      const cum = b.weeks.slice(0, week).reduce((a,c)=>a+c,0);
+      const target = b.approved * (week/5);
+      const uoSpend = target - cum;
+      const usagePct = target > 0 ? (cum/target*100) : (cum>0?Infinity:null);
+      const status = classify(usagePct, tolerance);
+      return {name:b.name, approved:target, actual:cum, uoSpend, usagePct, status};
+    });
+    rows.sort((a,b)=>a.name.localeCompare(b.name));
+    return rows;
+  }
+
+  function statsOf(rows){
+    const over = rows.filter(r=>r.status==="Overspend");
+    const under = rows.filter(r=>r.status==="Underspend");
+    const target = rows.filter(r=>r.status==="On Target");
+    const mean = (arr, fn) => arr.length ? arr.reduce((a,r)=>a+fn(r),0)/arr.length : null;
+    return {
+      overCount: over.length,
+      underCount: under.length,
+      targetCount: target.length,
+      avgOverspend: mean(over, r=>Math.abs(r.uoSpend)),
+      avgUnderspend: mean(under, r=>r.uoSpend),
+      avgOnTarget: mean(target, r=>Math.abs(r.uoSpend)),
+      avgUOSpend: mean(rows, r=>r.uoSpend),
+    };
+  }
+
+  function quarterOf(month){ return Math.floor((month-1)/3)+1; }
+  function prevQuarter(year, quarter){
+    return quarter === 1 ? {year:year-1, quarter:4} : {year, quarter:quarter-1};
+  }
+  function monthsInQuarter(year, quarter){
+    const start = (quarter-1)*3+1;
+    return [start, start+1, start+2].map(m=>({year, month:m}));
+  }
+
+  function getMonthEntry(year, month){
+    return state.data.months.find(m=>m.year===year && m.month===month) || null;
+  }
+
+  function cumulativeAvgUOSpend(uptoYear, uptoMonth){
+    // Running average of each period's overall Avg U/O Spend, across all months up to and including the one given.
+    const months = state.data.months.filter(m => (m.year < uptoYear) || (m.year===uptoYear && m.month<=uptoMonth));
+    if(!months.length) return null;
+    const perMonthAvg = months.map(m=>{
+      const rows = aggregateBrands([m], state.tolerance);
+      return statsOf(rows).avgUOSpend;
+    }).filter(v=>v!==null && isFinite(v));
+    if(!perMonthAvg.length) return null;
+    return perMonthAvg.reduce((a,b)=>a+b,0)/perMonthAvg.length;
+  }
+
+  function renderStatCards(stats, cumAvg, extra){
+    const cards = [
+      {cls:"c4", numCls:"over", label:"Overspend", value: stats.overCount + " brands"},
+      {cls:"c3", numCls:"under", label:"Underspend", value: stats.underCount + " brands"},
+      {cls:"c5", numCls:"target", label:"On Target", value: stats.targetCount + " brands"},
+      {cls:"c1", numCls:"", label:"Avg U/O Spend", value: fmtMoney(stats.avgUOSpend)},
+      {cls:"c2", numCls:"", label:"CUM AVG U/O Spend", value: fmtMoney(cumAvg)},
+    ];
+    return `<div class="stat-grid">${cards.map(c=>`
+      <div class="stat-card ${c.cls}">
+        <div class="num ${c.numCls}">${c.value}</div>
+        <div class="lbl">${c.label}</div>
+      </div>`).join("")}</div>
+      <div class="stat-grid">
+        <div class="stat-card c4"><div class="num over">${fmtMoney(stats.avgOverspend)}</div><div class="lbl">Avg Overspend</div></div>
+        <div class="stat-card c3"><div class="num under">${fmtMoney(stats.avgUnderspend)}</div><div class="lbl">Avg Underspend</div></div>
+        <div class="stat-card c5"><div class="num target">${fmtMoney(stats.avgOnTarget)}</div><div class="lbl">Avg On Target</div></div>
+      </div>`;
+  }
+
+  function renderQuarterCompare(currentStats, prevStats, curLabel, prevLabel){
+    function rows(s){
+      return `
+        <div class="row"><span>Avg Overspend</span><b>${fmtMoney(s.avgOverspend)}</b></div>
+        <div class="row"><span>Avg Underspend</span><b>${fmtMoney(s.avgUnderspend)}</b></div>
+        <div class="row"><span>Avg On Target</span><b>${fmtMoney(s.avgOnTarget)}</b></div>
+        <div class="row"><span>Avg U/O Spend</span><b>${fmtMoney(s.avgUOSpend)}</b></div>`;
+    }
+    return `<div class="section-title">Quarter comparison <span class="pill">${prevLabel} vs ${curLabel}</span></div>
+      <div class="quarter-compare">
+        <div class="qcard"><h3>${prevLabel} (Previous Quarter Avgs)</h3>${rows(prevStats)}</div>
+        <div class="qcard"><h3>${curLabel} (Current Quarter)</h3>${rows(currentStats)}</div>
+      </div>`;
+  }
+
+  function renderTable(rows, approvedLabel){
+    if(!rows.length) return `<div class="empty">No brands with tracked spend in this period.</div>`;
+    return `<table>
+      <thead><tr>
+        <th>Brand</th><th class="num-cell">${approvedLabel}</th><th class="num-cell">Actual Spend</th>
+        <th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`<tr>
+          <td class="brand-name">${r.name}</td>
+          <td class="num-cell">${fmtMoney(r.approved)}</td>
+          <td class="num-cell">${fmtMoney(r.actual)}</td>
+          <td class="num-cell">${fmtMoney(r.uoSpend)}</td>
+          <td class="num-cell">${fmtPct(r.usagePct)}</td>
+          <td><span class="badge ${badgeClass(r.status)}">${r.status}</span></td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+  }
+
+  function render(){
+    if(!state.data){ contentEl.innerHTML = `<div class="loading">Loading live data from ClickUp…</div>`; return; }
+    const tolerance = state.tolerance;
+    let rows, statLabel, curQuarterLabel, curStats, prevStats, prevLabel, cumAvg, approvedLabel="Approved Spend";
+
+    if(state.period === "year"){
+      const monthsInYear = state.data.months.filter(m=>m.year===state.year);
+      rows = aggregateBrands(monthsInYear, tolerance);
+      curStats = statsOf(rows);
+      cumAvg = cumulativeAvgUOSpend(state.year, 12);
+      // quarter compare not very meaningful at year granularity -> compare last quarter of this year vs previous
+      const q = 4;
+      const curQMonths = monthsInQuarter(state.year, q).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+      const pq = prevQuarter(state.year, q);
+      const prevQMonths = monthsInQuarter(pq.year, pq.quarter).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+      curStats = curQMonths.length ? statsOf(aggregateBrands(curQMonths, tolerance)) : statsOf(rows);
+      prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
+      curQuarterLabel = curQMonths.length ? `Q${q} ${state.year}` : `FY${state.year}`;
+      prevLabel = `Q${pq.quarter} ${pq.year}`;
+      statLabel = `${state.year} — full year`;
+    } else if(state.period === "month"){
+      const m = getMonthEntry(state.year, state.month);
+      rows = m ? aggregateBrands([m], tolerance) : [];
+      curStats = statsOf(rows);
+      cumAvg = cumulativeAvgUOSpend(state.year, state.month);
+      const q = quarterOf(state.month);
+      const pq = prevQuarter(state.year, q);
+      const prevQMonths = monthsInQuarter(pq.year, pq.quarter).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+      prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
+      curQuarterLabel = `Q${q} ${state.year}`;
+      prevLabel = `Q${pq.quarter} ${pq.year}`;
+      statLabel = `${MONTH_NAMES[state.month]} ${state.year}`;
+    } else {
+      const m = getMonthEntry(state.year, state.month);
+      rows = weekBrands(m, state.week, tolerance);
+      curStats = statsOf(rows);
+      cumAvg = cumulativeAvgUOSpend(state.year, state.month);
+      const q = quarterOf(state.month);
+      const pq = prevQuarter(state.year, q);
+      const prevQMonths = monthsInQuarter(pq.year, pq.quarter).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+      prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
+      curQuarterLabel = `Q${q} ${state.year}`;
+      prevLabel = `Q${pq.quarter} ${pq.year}`;
+      statLabel = `${MONTH_NAMES[state.month]} ${state.year} — through Week ${state.week}`;
+      approvedLabel = `Prorated Target (Wk ${state.week})`;
+    }
+
+    contentEl.innerHTML = `
+      <div class="section-title">${statLabel} <span class="pill">${rows.length} brands tracked</span></div>
+      ${renderStatCards(curStats, cumAvg)}
+      ${renderQuarterCompare(curStats, prevStats, curQuarterLabel, prevLabel)}
+      <div class="section-title">Brand detail</div>
+      ${renderTable(rows, approvedLabel)}
+    `;
+  }
+
+  function populateSelectors(){
+    const years = [...new Set(state.data.months.map(m=>m.year))].sort();
+    yearSelect.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join("");
+    state.year = years[years.length-1];
+    yearSelect.value = state.year;
+
+    function monthsForYear(y){
+      return state.data.months.filter(m=>m.year===y).map(m=>m.month).sort((a,b)=>a-b);
+    }
+    function refreshMonthOptions(){
+      const months = monthsForYear(state.year);
+      monthSelect.innerHTML = months.map(m=>`<option value="${m}">${MONTH_NAMES[m]}</option>`).join("");
+      state.month = months[months.length-1];
+      monthSelect.value = state.month;
+    }
+    refreshMonthOptions();
+
+    yearSelect.addEventListener("change", ()=>{
+      state.year = Number(yearSelect.value);
+      refreshMonthOptions();
+      render();
+    });
+    monthSelect.addEventListener("change", ()=>{
+      state.month = Number(monthSelect.value);
+      render();
+    });
+    weekSelect.addEventListener("change", ()=>{
+      state.week = Number(weekSelect.value);
+      render();
+    });
+  }
+
+  document.getElementById("periodTabs").addEventListener("click", (e)=>{
+    const btn = e.target.closest("button[data-period]");
+    if(!btn) return;
+    document.querySelectorAll("#periodTabs button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    state.period = btn.dataset.period;
+    monthWrap.style.display = (state.period==="month"||state.period==="week") ? "flex" : "none";
+    weekWrap.style.display = (state.period==="week") ? "flex" : "none";
+    render();
+  });
+
+  toleranceInput.addEventListener("change", ()=>{
+    state.tolerance = Number(toleranceInput.value) || 0;
+    render();
+  });
+
+  async function load(){
+    contentEl.innerHTML = `<div class="loading">Loading live data from ClickUp…</div>`;
+    try{
+      const resp = await fetch("/api/report");
+      const json = await resp.json();
+      if(!resp.ok) throw new Error(json.error || "Failed to load report");
+      state.data = json;
+      populateSelectors();
+      render();
+    }catch(err){
+      contentEl.innerHTML = `<div class="error">Couldn't load data: ${err.message}</div>`;
+    }
+  }
+
+  refreshBtn.addEventListener("click", load);
+  load();
+})();
+</script>
+</body>
+</html>
