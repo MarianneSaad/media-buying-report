@@ -107,6 +107,7 @@
     background:#fff; font-weight:600; margin-right:6px;
   }
   .control-row .field-label{font-size:12.5px; color:var(--muted); font-weight:700; margin-right:2px;}
+  .control-row .field-label.active{color:var(--purple); background:#f1e6f5; padding:4px 9px; border-radius:6px;}
   .control-row .period-pill{
     margin-left:auto; font-size:11.5px; font-weight:700; color:var(--muted); background:var(--card);
     border-radius:100px; padding:6px 14px; white-space:nowrap;
@@ -221,10 +222,14 @@
   .health-legend{display:flex; gap:22px; margin-bottom:30px; font-size:13px; font-weight:700; color:var(--ink);}
   .health-legend .dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px;}
   .top-lists{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:10px;}
-  .top-list{border:1px solid var(--border); border-radius:12px; padding:16px 18px;}
-  .top-list h3{margin:0 0 12px 0; font-size:13px; text-transform:uppercase; letter-spacing:.4px;}
-  .top-list h3.over{color:var(--red);} .top-list h3.under{color:var(--orange);}
-  .top-row{display:flex; justify-content:space-between; font-size:13.5px; padding:7px 0; border-bottom:1px dashed var(--border);}
+  .top-list{border:1px solid var(--border); border-radius:12px; padding:18px 20px;}
+  .top-list h3{margin:0 0 14px 0; font-size:15px; text-transform:uppercase; letter-spacing:.4px;}
+  .top-list h3.over{color:var(--red);} .top-list h3.under{color:var(--orange);} .top-list h3.target{color:var(--green);}
+  .top-row{display:flex; justify-content:space-between; font-size:16px; padding:9px 0; border-bottom:1px dashed var(--border);}
+  .top-row b{font-size:16.5px;}
+  .snapshot-name-clickable{cursor:pointer;}
+  .snapshot-name-clickable:hover{text-decoration:underline;}
+  .snapshot-name-clickable.active{font-weight:800;}
   .top-row:last-child{border-bottom:none;}
   .top-row b.over{color:var(--red);} .top-row b.under{color:var(--orange);}
   .empty.small{padding:14px 0; font-size:13px;}
@@ -245,11 +250,11 @@
   .assignee-name-card{
     display:flex; align-items:center; justify-content:space-between; gap:16px; text-align:left;
     background:var(--card); border-radius:12px; padding:12px 20px; cursor:pointer; transition:.15s;
-    width:100%; max-width:560px;
+    width:100%; max-width:900px; white-space:nowrap;
   }
   .assignee-name-card:hover{filter:brightness(0.97);}
   .assignee-name-card.active{box-shadow:0 0 0 2px var(--ink) inset;}
-  .an-name{font-size:18px; font-weight:800; line-height:1.2;}
+  .an-name{font-size:18px; font-weight:800; line-height:1.2; white-space:nowrap; flex-shrink:0;}
   .an-side{display:flex; align-items:center; gap:16px; flex-shrink:0;}
   .an-count{font-size:13.5px; color:var(--muted); font-weight:700; white-space:nowrap;}
   .an-mix{display:flex; gap:10px; font-size:12.5px; font-weight:700; white-space:nowrap;}
@@ -351,7 +356,7 @@
     drillStatus: null, lastRows: [],
     assigneePeriod: null, drillAssignee: null, assigneeGranularity: "month", assigneeWeek: 5,
     overviewSort: { key: "period", dir: "desc" }, expandedClientGroups: new Set(), overviewDrill: null,
-    assigneeGroupBy: "assignee", drillClient: null, overviewRange: "all" };
+    assigneeGroupBy: "assignee", drillClient: null, overviewRange: "all", snapshotDrillBrand: null };
 
   const contentEl = document.getElementById("content");
   const selectorPool = document.getElementById("selectorPool");
@@ -852,6 +857,29 @@
 
     const topOver = rows.filter(r=>r.status==="Overspend").sort((a,b)=>a.uoSpend-b.uoSpend).slice(0,5);
     const topUnder = rows.filter(r=>r.status==="Underspend").sort((a,b)=>b.uoSpend-a.uoSpend).slice(0,5);
+    const topTarget = rows.filter(r=>r.status==="On Target").sort((a,b)=>Math.abs(a.uoSpend)-Math.abs(b.uoSpend)).slice(0,5);
+
+    // Click a brand's name in any of the three lists to expand an inline detail card right
+    // underneath it — same click-to-open-details pattern used everywhere else in the app.
+    function snapshotBrandDetail(r){
+      return `<div class="drill-panel" style="margin:0 0 10px 0;">
+        <div class="drill-head"><span>${r.name} — details</span></div>
+        <div style="padding:12px 16px; display:grid; grid-template-columns:1fr 1fr; gap:10px 20px; font-size:13.5px; text-align:left;">
+          <div><span style="color:var(--muted); font-weight:700;">Client</span><br><b>${r.client||r.name}</b></div>
+          <div><span style="color:var(--muted); font-weight:700;">Status</span><br><span class="badge ${badgeClass(r.status)}">${r.status}</span></div>
+          <div><span style="color:var(--muted); font-weight:700;">Approved</span><br><b>${fmtMoney(r.approved)}</b></div>
+          <div><span style="color:var(--muted); font-weight:700;">Actual</span><br><b>${fmtMoney(r.actual)}</b></div>
+          <div><span style="color:var(--muted); font-weight:700;">U/O Spend $</span><br><b>${fmtMoney(r.uoSpend)}</b></div>
+          <div><span style="color:var(--muted); font-weight:700;">Usage %</span><br><b>${fmtPct(r.usagePct)}</b></div>
+          <div style="grid-column:1/-1;"><span style="color:var(--muted); font-weight:700;">Assignee</span><br><b>${(r.assignees&&r.assignees.length)?r.assignees.join(", "):"—"}</b></div>
+        </div>
+      </div>`;
+    }
+    function snapshotRow(r, colorCls){
+      const isActive = state.snapshotDrillBrand === r.name;
+      return `<div class="top-row"><span class="snapshot-name-clickable${isActive?" active":""}" data-snapname="${r.name}">${r.name}</span><b class="${colorCls}">${fmtMoney(r.uoSpend)}</b></div>
+        ${isActive ? snapshotBrandDetail(r) : ""}`;
+    }
 
     state.lastRows = rows;
     contentEl.innerHTML = `
@@ -870,14 +898,18 @@
         <span><i class="dot target"></i>${stats.targetCount} On Target</span>
         <span style="color:var(--muted); font-weight:600;">out of ${rows.length} brands tracked</span>
       </div>
+      <div class="top-list" style="margin-bottom:16px;">
+        <h3 class="target">On Target</h3>
+        ${topTarget.length ? topTarget.map(r=>snapshotRow(r,"text-target")).join("") : `<div class="empty small">No brands on target this period.</div>`}
+      </div>
       <div class="top-lists">
         <div class="top-list">
           <h3 class="over">Biggest Overspends</h3>
-          ${topOver.length ? topOver.map(r=>`<div class="top-row"><span>${r.name}</span><b class="over">${fmtMoney(r.uoSpend)}</b></div>`).join("") : `<div class="empty small">No overspends this period.</div>`}
+          ${topOver.length ? topOver.map(r=>snapshotRow(r,"over")).join("") : `<div class="empty small">No overspends this period.</div>`}
         </div>
         <div class="top-list">
           <h3 class="under">Biggest Underspends</h3>
-          ${topUnder.length ? topUnder.map(r=>`<div class="top-row"><span>${r.name}</span><b class="under">${fmtMoney(r.uoSpend)}</b></div>`).join("") : `<div class="empty small">No underspends this period.</div>`}
+          ${topUnder.length ? topUnder.map(r=>snapshotRow(r,"under")).join("") : `<div class="empty small">No underspends this period.</div>`}
         </div>
       </div>
     `;
@@ -1102,6 +1134,21 @@
     }
     if(quarters.length) quarters[quarters.length-1].isLatest = (state.year === (latestAvailableMonth()||{}).year);
 
+    // Row layout: the most recent pair of quarters always leads, newest-first, on its own row;
+    // any older quarters follow below in their own row(s), centered, in normal chronological
+    // (oldest-first) order — e.g. 4 quarters on record renders as [Q4,Q3] on top, [Q1,Q2] below;
+    // 3 renders as [Q3,Q2] on top with Q1 alone, centered, underneath; 2 or fewer just sit
+    // together on one row.
+    const n = quarters.length;
+    let displayRows = [];
+    if(n <= 2){
+      displayRows = [ [...quarters].reverse() ];
+    } else {
+      const newestPair = [quarters[n-1], quarters[n-2]];
+      const older = quarters.slice(0, n-2);
+      displayRows = [newestPair, older];
+    }
+
     contentEl.innerHTML = `
       <div class="section-title" style="margin-top:2px">Quarter Compare</div>
       <div class="control-row">
@@ -1109,12 +1156,14 @@
         <span id="qcYearSlot"></span>
         <span class="period-pill">${quarters.length} quarter${quarters.length===1?"":"s"} tracked in ${state.year}</span>
       </div>
-      ${quarters.length ? `<div class="quarters-grid">
-        ${[...quarters].reverse().map((qd)=>{
-          const i = quarters.indexOf(qd);
-          return renderQuarterCard(qd, i>0 ? quarters[i-1].stats : null);
-        }).join("")}
-      </div>` : `<div class="empty">No data available for ${state.year} yet.</div>`}
+      ${quarters.length ? displayRows.filter(r=>r.length).map(rowQuarters => `
+        <div class="quarters-grid">
+          ${rowQuarters.map(qd=>{
+            const i = quarters.indexOf(qd);
+            return renderQuarterCard(qd, i>0 ? quarters[i-1].stats : null);
+          }).join("")}
+        </div>
+      `).join("") : `<div class="empty">No data available for ${state.year} yet.</div>`}
     `;
     mount(yearWrap, "qcYearSlot");
   }
@@ -1201,11 +1250,6 @@
         <div class="control-row" style="margin:24px 0 10px 0;">
           <span class="field-label">All brands under ${entity}</span>
           <span class="pill">${row.brands.length} brands</span>
-          <span class="field-label" style="margin-left:auto;">Filter by brand</span>
-          <select id="clientBrandFilterSelect">
-            <option value="">All brands</option>
-            ${row.brands.map(b=>`<option value="${b.name}" ${state.clientBrandFilter===b.name?"selected":""}>${b.name}</option>`).join("")}
-          </select>
         </div>
         <table class="nowrap-cells">
           <thead><tr><th>Brand</th><th class="num-cell">${approvedLabel}</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
@@ -1228,14 +1272,20 @@
     contentEl.innerHTML = `
       <div class="section-title" style="margin-top:2px">${entity}${hasBrands ? ` <span class="pill">${row.brands.length} brands</span>` : ""}${assigneeNames ? ` <span class="pill">Assigned to: ${assigneeNames}</span>` : ""}</div>
       <div class="control-row" id="clientControlRow">
-        <span class="field-label">Year</span>
+        <span class="field-label ${state.clientPeriod==="year"?"active":""}">Year</span>
         <span id="ccYearSlot"></span>
-        <span class="field-label">Month</span>
+        <span class="field-label ${state.clientPeriod==="month"?"active":""}">Month</span>
         <span id="ccMonthSlot"></span>
-        <span class="field-label">Week</span>
+        <span class="field-label ${state.clientPeriod==="week"?"active":""}">Week</span>
         <span id="ccWeekSlot"></span>
         <span class="field-label">Client</span>
         <span id="ccClientSlot"></span>
+        ${hasBrands ? `
+        <span class="field-label">Brand</span>
+        <select id="clientBrandFilterSelect">
+          <option value="">All brands</option>
+          ${row.brands.map(b=>`<option value="${b.name}" ${state.clientBrandFilter===b.name?"selected":""}>${b.name}</option>`).join("")}
+        </select>` : ""}
         <span class="period-pill">${label}</span>
       </div>
       <div class="stat-grid">
@@ -1615,6 +1665,14 @@
     const overviewRangeBtn = e.target.closest(".control-row button[data-overviewrange]");
     if(overviewRangeBtn){
       state.overviewRange = overviewRangeBtn.dataset.overviewrange;
+      render();
+      return;
+    }
+
+    const snapName = e.target.closest(".snapshot-name-clickable");
+    if(snapName){
+      const name = snapName.dataset.snapname;
+      state.snapshotDrillBrand = (state.snapshotDrillBrand === name) ? null : name;
       render();
       return;
     }
