@@ -55,13 +55,13 @@ const NAME_ALIASES = {
 };
 
 // Non-brand organizational/breakdown rows that should never appear as a "brand" line item.
+// NOTE: "Access Bank Linkedin" / "Access Bank W Community" used to be excluded here on the
+// (incorrect) assumption that they were duplicate rollup rows of the "Access Bank" task. They
+// are in fact their own separately budgeted channel lines (own Approved Spend, own weekly
+// spend) — confirmed directly against ClickUp — so they now count as real brand rows, and are
+// grouped under the "Access Bank" client via the Client/Brand field below.
 const EXCLUDE_NAMES = new Set([
-  "instagram",
-  "linkedin",
-  "w community",
   "assets mobilization",
-  "access bank linkedin",
-  "access bank w community",
 ]);
 
 function normalizeName(raw) {
@@ -75,6 +75,26 @@ function numField(customFields, id) {
   if (!f || f.value === null || f.value === undefined || f.value === "") return null;
   const n = Number(f.value);
   return Number.isFinite(n) ? n : null;
+}
+
+// The ClickUp "Client / Brand" dropdown field groups multiple brand-level tasks under one
+// client (e.g. "Trade kings Group (TK GROUP)", "Trade kings Group (MEDI HERB)" ... all roll up
+// to client "Trade Kings"; "Access Bank", "Access Bank Linkedin", "Access Bank W Community" all
+// roll up to client "Access Bank"). The field's stored value is the selected option's
+// orderindex; its option list (with display names) travels inline on every task's custom_fields
+// payload, so no extra API calls are needed. Falls back to the brand's own name when the field
+// isn't set on a task (so it still works standalone, just ungrouped).
+function clientOf(customFields, fallbackName) {
+  const f = customFields.find((c) => c.id === CLIENT_BRAND_FIELD);
+  if (!f || f.value === null || f.value === undefined) return fallbackName;
+  const options = f.type_config && Array.isArray(f.type_config.options) ? f.type_config.options : null;
+  if (!options) return fallbackName;
+  const opt = options.find((o) => o.orderindex === f.value) || options[f.value];
+  if (!opt || !opt.name) return fallbackName;
+  // Strip a trailing "(BRAND CODE)" annotation to get just the client name, e.g.
+  // "Trade kings Group (TK GROUP)" -> "Trade kings Group".
+  const stripped = opt.name.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return stripped || fallbackName;
 }
 
 async function fetchList(listId, token) {
@@ -114,10 +134,11 @@ export default async function handler(req, res) {
           const actual = weeks.reduce((a, b) => a + b, 0);
           const name = normalizeName(rawName);
           const assignees = (t.assignees || []).map((a) => a.username).filter(Boolean);
+          const client = clientOf(cf, name);
           const updatedAt = Number(t.date_updated) || 0;
           const existing = brandMap.get(name);
           if (!existing || updatedAt >= existing.updatedAt) {
-            brandMap.set(name, { updatedAt, entry: { name, approved, weeks, actual, assignees } });
+            brandMap.set(name, { updatedAt, entry: { name, approved, weeks, actual, assignees, client } });
           }
         }
         const brands = [...brandMap.values()].map((v) => v.entry);
