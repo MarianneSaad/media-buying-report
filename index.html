@@ -28,32 +28,39 @@
 
   /* ---------- Header ---------- */
   header.site{
-    border-bottom:1px solid var(--border);
-    padding:22px 32px 0 32px;
+    padding:26px 32px 0 32px;
   }
   .header-top{
     display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
-    padding-bottom:18px;
+    padding-bottom:20px;
   }
   .logo-row{display:flex; align-items:center; gap:18px;}
   .logo-row img{height:56px; display:block;}
-  .contact-block{
-    display:flex; gap:22px; flex-wrap:wrap; color:var(--muted); font-size:13px; line-height:1.5;
+  .brand-row{display:flex; align-items:center; gap:12px;}
+  .brand-row .brand-text{
+    font-family:Georgia,"Times New Roman",serif; font-weight:700; font-size:22px; color:#9a9a9f;
+    letter-spacing:.2px;
   }
-  .contact-block b{color:var(--ink); font-weight:700;}
-  .contact-sep{width:1px; background:var(--teal); align-self:stretch; opacity:.5;}
+  .bars-icon{display:flex; flex-direction:column; gap:3px;}
+  .bars-icon span{display:block; width:26px; height:4px; border-radius:3px;}
+  .bars-icon span:nth-child(1){background:var(--purple);}
+  .bars-icon span:nth-child(2){background:var(--pink);}
+  .bars-icon span:nth-child(3){background:var(--orange);}
+  .bars-icon span:nth-child(4){background:var(--red); width:18px;}
 
-  .title-row{
-    background:linear-gradient(90deg,var(--purple),var(--pink) 35%,var(--orange) 68%,var(--red) 100%);
-    color:#fff; border-radius:14px 14px 0 0; margin-top:4px;
-    padding:18px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  /* Rounded white card with a thin brand-gradient edge on one side — used for the tab bar
+     under the header, and mirrored (gradient on top) as the footer at the bottom of the page. */
+  .gradient-edge-card{
+    border-radius:16px; padding:0 0 5px 0; background:linear-gradient(90deg,var(--purple),var(--pink) 35%,var(--orange) 68%,var(--red) 100%);
   }
-  .title-row h1{font-size:22px; margin:0; font-weight:800; letter-spacing:.2px;}
-  .title-row .sub{font-size:12.5px; opacity:.92; margin-top:2px;}
+  .gradient-edge-card > .inner{
+    background:#fff; border-radius:16px 16px 0 0;
+  }
+  .gradient-edge-card.flip{ padding:5px 0 0 0; }
+  .gradient-edge-card.flip > .inner{ border-radius:0 0 16px 16px; }
 
   nav.tabs{
-    display:flex; gap:6px; background:#fff; border:1px solid var(--border); border-top:none;
-    border-radius:0 0 14px 14px; padding:10px 14px; margin-bottom:0;
+    display:flex; gap:6px; padding:10px 14px;
   }
   nav.tabs button{
     border:none; background:transparent; color:var(--muted); font-weight:700; font-size:13.5px;
@@ -136,11 +143,11 @@
 
   /* ---------- Footer ---------- */
   footer.site{
-    border-top:1px solid var(--border); margin-top:20px; padding:22px 32px; color:var(--muted); font-size:12.5px;
-    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;
+    margin:28px 32px 32px 32px;
   }
-  footer.site .contact-block{font-size:12.5px;}
-  footer.site .copyright{font-size:11.5px;}
+  footer.site .inner{
+    display:flex; align-items:center; justify-content:center; padding:14px;
+  }
 </style>
 </head>
 <body>
@@ -150,25 +157,20 @@
     <div class="logo-row">
       <img src="/logo.png" alt="Giraffe Creatives" />
     </div>
-    <div class="contact-block">
-      <div><b>t.</b> +260 211 272935<br/><b>m.</b> +260 962 221222</div>
-      <div class="contact-sep"></div>
-      <div>info@giraffecreatives.com<br/>www.giraffecreatives.com</div>
-      <div class="contact-sep"></div>
-      <div>401 A, St Bonaventure<br/>Lusaka, Zambia</div>
+    <div class="brand-row">
+      <span class="brand-text">Inspired Creative Solutions</span>
+      <span class="bars-icon"><span></span><span></span><span></span><span></span></span>
     </div>
   </div>
-  <div class="title-row">
-    <div>
-      <h1>Media Buying — Spend Pacing Report</h1>
-      <div class="sub">Approved budget vs. actual spend across all Inspired Creative Solutions media buying brands</div>
+  <div class="gradient-edge-card">
+    <div class="inner">
+      <nav class="tabs" id="periodTabs">
+        <button data-period="year" class="active">Year</button>
+        <button data-period="month">Month</button>
+        <button data-period="week">Week</button>
+      </nav>
     </div>
   </div>
-  <nav class="tabs" id="periodTabs">
-    <button data-period="year" class="active">Year</button>
-    <button data-period="month">Month</button>
-    <button data-period="week">Week</button>
-  </nav>
 </header>
 
 <div class="controls">
@@ -194,16 +196,19 @@
 </div>
 
 <main>
+  <div class="section-title" style="margin-top:4px">Media Buying — Spend Pacing Report <span class="pill">Approved budget vs. actual spend across all brands</span></div>
   <div id="content" class="loading">Loading live data from ClickUp…</div>
 </main>
 
 <footer class="site">
-  <div class="contact-block">
-    <div><b>t.</b> +260 211 272935 &nbsp;|&nbsp; <b>m.</b> +260 962 221222</div>
-    <div>info@giraffecreatives.com &nbsp;|&nbsp; www.giraffecreatives.com</div>
-    <div>401 A, St Bonaventure, Lusaka, Zambia</div>
+  <div class="gradient-edge-card flip">
+    <div class="inner">
+      <div class="brand-row" style="justify-content:center; padding:14px;">
+        <span class="bars-icon"><span></span><span></span><span></span><span></span></span>
+        <span class="brand-text" style="font-size:16px">Inspired Creative Solutions</span>
+      </div>
+    </div>
   </div>
-  <div class="copyright">Inspired Creative Solutions · Media Buying Report</div>
 </footer>
 
 <script>
