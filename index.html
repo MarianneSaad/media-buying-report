@@ -1220,7 +1220,7 @@
             <option value="4" ${week===4?"selected":""}>Week 4</option>
             <option value="5" ${week===5?"selected":""}>Week 5</option>
           </select>
-        <span class="period-pill">${periodLabel}</span>
+        <span class="period-pill">${periodLabel} · across all clients this period</span>
       </div>
       ${renderAssigneeSnapshot(summary, overallStats, rows)}
     `;
@@ -1263,13 +1263,10 @@
         <div class="akpi-chip"><b style="color:var(--orange)">${busiest ? firstName(busiest.name) : "—"}</b>Busiest${busiest ? " · "+busiest.clientCount+" clients" : ""}</div>
         <div class="akpi-chip"><b style="color:var(--teal)">${avgPerAssignee===null?"—":avgPerAssignee.toFixed(1)}</b>Avg Clients / Assignee</div>
       </div>
-      <div class="assignee-kpi-line" style="margin:14px 0 4px 0;">
+      <div class="assignee-kpi-line" style="margin:14px 0 22px 0;">
         <div class="akpi-chip"><b class="text-over">${overallStats.overCount}</b>Overspend</div>
         <div class="akpi-chip"><b class="text-under">${overallStats.underCount}</b>Underspend</div>
         <div class="akpi-chip"><b class="text-target">${overallStats.targetCount}</b>On Target</div>
-        <div class="akpi-chip" style="color:var(--muted);">across all clients this period</div>
-      </div>
-      <div class="assignee-kpi-line" style="margin:0 0 22px 0;">
         <div class="akpi-chip">Avg Overspend: <b class="text-over">${fmtMoney(overallStats.avgOverspend)}</b></div>
         <div class="akpi-chip">Avg Underspend: <b class="text-under">${fmtMoney(overallStats.avgUnderspend)}</b></div>
         <div class="akpi-chip">Avg On Target: <b class="text-target">${fmtMoney(overallStats.avgOnTarget)}</b></div>
