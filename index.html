@@ -191,6 +191,15 @@
   .top-row b.over{color:var(--red);} .top-row b.under{color:var(--orange);}
   .empty.small{padding:14px 0; font-size:13px;}
 
+  /* ---------- By Assignee ---------- */
+  .assignee-month-picker{margin:14px 0 20px 0;}
+  .assignee-month-picker label{font-size:12.5px; color:var(--muted); font-weight:700; display:flex; align-items:center; gap:8px;}
+  .assignee-month-picker select{
+    border:1px solid var(--border); border-radius:9px; padding:9px 12px; font-size:13.5px; color:var(--ink); background:#fff; font-weight:600;
+  }
+  tr.assignee-row:hover{background:var(--card);}
+  tr.assignee-row .pill{font-weight:600; text-transform:none; letter-spacing:0;}
+
   /* ---------- Quarter compare: colored metrics + deltas ---------- */
   .qcard{border-left-width:5px; border-left-style:solid; border-left-color:var(--muted);}
   .qcard.current{border-left-color:var(--purple);}
@@ -226,13 +235,12 @@
   <div class="gradient-edge-card">
     <div class="inner">
       <nav class="tabs" id="periodTabs">
-        <button data-period="year" class="active">Year</button>
-        <button data-period="month">Month</button>
-        <button data-period="week">Week</button>
-        <button data-period="snapshot">Snapshot</button>
-        <button data-period="overview">Overview</button>
-        <button data-period="qcompare">Quarter Compare</button>
-        <button data-period="client">By Client</button>
+        <button data-tab="report" class="active">Report</button>
+        <button data-tab="snapshot">Snapshot</button>
+        <button data-tab="overview">Overview</button>
+        <button data-tab="qcompare">Quarter Compare</button>
+        <button data-tab="client">By Client</button>
+        <button data-tab="assignee">By Assignee</button>
       </nav>
     </div>
   </div>
@@ -275,8 +283,9 @@
 
 <script>
 (function(){
-  const state = { period: "year", data: null, year: null, month: null, week: 5, tolerance: 5,
-    clientPeriod: "year", selectedClient: null, drillStatus: null, lastRows: [] };
+  const state = { tab: "report", reportGranularity: "year", data: null, year: null, month: null, week: 5, tolerance: 5,
+    clientPeriod: "year", selectedClient: null, drillStatus: null, lastRows: [],
+    assigneePeriod: null, drillAssignee: null };
 
   const contentEl = document.getElementById("content");
   const controlsBar = document.getElementById("controlsBar");
@@ -297,6 +306,14 @@
   // the same controls aren't shown in two places on screen at once.
   function dockSelectorGroupToTopBar(){
     controlsBar.insertBefore(selectorGroup, refreshBtn);
+  }
+  // Pages that need no Year/Month/Week/Client controls at all (Snapshot, Overview) hide every
+  // selector so the top bar shows nothing but the Refresh button.
+  function hideAllSelectors(){
+    clientWrap.style.display = "none";
+    yearWrap.style.display = "none";
+    monthWrap.style.display = "none";
+    weekWrap.style.display = "none";
   }
 
   const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -339,17 +356,18 @@
     const map = new Map();
     for(const m of monthEntries){
       for(const b of m.brands){
-        if(!map.has(b.name)) map.set(b.name, {name:b.name, approved:0, actual:0});
+        if(!map.has(b.name)) map.set(b.name, {name:b.name, approved:0, actual:0, assignees:new Set()});
         const agg = map.get(b.name);
         agg.approved += b.approved;
         agg.actual += b.actual;
+        (b.assignees||[]).forEach(a=>agg.assignees.add(a));
       }
     }
     const rows = [...map.values()].map(r=>{
       const uoSpend = r.approved - r.actual;
       const usagePct = r.approved > 0 ? (r.actual / r.approved * 100) : (r.actual > 0 ? Infinity : null);
       const status = classify(usagePct, tolerance);
-      return {...r, uoSpend, usagePct, status};
+      return {...r, assignees:[...r.assignees], uoSpend, usagePct, status};
     });
     rows.sort((a,b)=> a.name.localeCompare(b.name));
     return rows;
@@ -364,10 +382,31 @@
       const uoSpend = target - cum;
       const usagePct = target > 0 ? (cum/target*100) : (cum>0?Infinity:null);
       const status = classify(usagePct, tolerance);
-      return {name:b.name, approved:target, actual:cum, uoSpend, usagePct, status};
+      return {name:b.name, approved:target, actual:cum, uoSpend, usagePct, status, assignees:b.assignees||[]};
     });
     rows.sort((a,b)=>a.name.localeCompare(b.name));
     return rows;
+  }
+
+  // The ClickUp sheet's own follow-on formulas, re-derived from approved/actual/usage% so they
+  // work consistently at every granularity (year aggregate, single month, or week-to-date) —
+  // not just when reading one raw ClickUp task. Verified to match ClickUp's cached field values.
+  function sheetFields(row){
+    const cumSpend = row.actual;
+    const uoSpend = row.uoSpend;
+    const currentUsagePct = row.usagePct;
+    const targetUsagePct = 100;
+    let newWeeklyUsagePct = null, newWeeklyAmount = null;
+    if(currentUsagePct !== null && isFinite(currentUsagePct)){
+      newWeeklyUsagePct = Math.round(100 - currentUsagePct);
+      newWeeklyAmount = Math.ceil((100 - currentUsagePct) * row.approved * 10);
+    }
+    return { cumSpend, uoSpend, currentUsagePct, targetUsagePct, newWeeklyUsagePct, newWeeklyAmount };
+  }
+
+  // Assignee tracking only became reliable starting the July 2026 tracker.
+  function isAssigneeEligible(year, month){
+    return year > 2026 || (year === 2026 && month >= 7);
   }
 
   function statsOf(rows){
@@ -487,22 +526,40 @@
       </div>`;
   }
 
-  function renderTable(rows, approvedLabel){
+  // Columns mirror the ClickUp tracker sheet itself: Approved, CUM Spend, U/O Spend, Current
+  // Usage %, Target Usage %, New Weekly Usage %, New Weekly Amount $, Status — plus Assignee
+  // for periods where that's tracked (July 2026 onward).
+  function renderTable(rows, approvedLabel, opts){
+    const showAssignee = !!(opts && opts.showAssignee);
     if(!rows.length) return `<div class="empty">No brands with tracked spend in this period.</div>`;
     return `<table>
       <thead><tr>
-        <th>Brand</th><th class="num-cell">${approvedLabel}</th><th class="num-cell">Actual Spend</th>
-        <th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th>
+        <th>Brand</th>${showAssignee ? `<th>Assignee</th>` : ""}
+        <th class="num-cell">${approvedLabel}</th>
+        <th class="num-cell">CUM Spend</th>
+        <th class="num-cell">U/O Spend $</th>
+        <th class="num-cell">Current Usage %</th>
+        <th class="num-cell">Target Usage %</th>
+        <th class="num-cell">New Weekly Usage %</th>
+        <th class="num-cell">New Weekly Amount $</th>
+        <th>Status</th>
       </tr></thead>
       <tbody>
-        ${rows.map(r=>`<tr>
+        ${rows.map(r=>{
+          const sf = sheetFields(r);
+          return `<tr>
           <td class="brand-name">${r.name}</td>
+          ${showAssignee ? `<td>${(r.assignees && r.assignees.length) ? r.assignees.join(", ") : "—"}</td>` : ""}
           <td class="num-cell">${fmtMoney(r.approved)}</td>
-          <td class="num-cell">${fmtMoney(r.actual)}</td>
-          <td class="num-cell">${fmtMoney(r.uoSpend)}</td>
-          <td class="num-cell">${fmtPct(r.usagePct)}</td>
+          <td class="num-cell">${fmtMoney(sf.cumSpend)}</td>
+          <td class="num-cell">${fmtMoney(sf.uoSpend)}</td>
+          <td class="num-cell">${fmtPct(sf.currentUsagePct)}</td>
+          <td class="num-cell">${sf.targetUsagePct}%</td>
+          <td class="num-cell">${sf.newWeeklyUsagePct===null?"—":sf.newWeeklyUsagePct+"%"}</td>
+          <td class="num-cell">${sf.newWeeklyAmount===null?"—":fmtMoney(sf.newWeeklyAmount)}</td>
           <td><span class="badge ${badgeClass(r.status)}">${r.status}</span></td>
-        </tr>`).join("")}
+        </tr>`;
+        }).join("")}
       </tbody>
     </table>`;
   }
@@ -513,15 +570,23 @@
     dockSelectorGroupToTopBar();
     if(!state.data){ contentEl.innerHTML = `<div class="loading">Loading live data from ClickUp…</div>`; return; }
 
-    if(state.period === "snapshot") return renderSnapshotPage();
-    if(state.period === "overview") return renderOverviewPage();
-    if(state.period === "qcompare") return renderQuarterComparePage();
-    if(state.period === "client") return renderClientPage();
+    if(state.tab === "snapshot") return renderSnapshotPage();
+    if(state.tab === "overview") return renderOverviewPage();
+    if(state.tab === "qcompare") return renderQuarterComparePage();
+    if(state.tab === "client") return renderClientPage();
+    if(state.tab === "assignee") return renderAssigneePage();
+    return renderReportPage();
+  }
 
+  // ---------- Report: the original Year / Month / Week views, unified under one tab with its
+  // own internal granularity toggle (instead of three separate top-level tabs) so the same
+  // "Year/Month/Week" wording only ever appears in one place on screen. ----------
+  function renderReportPage(){
     const tolerance = state.tolerance;
     let rows, statLabel, curQuarterLabel, curStats, prevStats, prevLabel, cumAvg, approvedLabel="Approved Spend";
+    const g = state.reportGranularity;
 
-    if(state.period === "year"){
+    if(g === "year"){
       const monthsInYear = state.data.months.filter(m=>m.year===state.year);
       rows = aggregateBrands(monthsInYear, tolerance);
       curStats = statsOf(rows);
@@ -536,7 +601,7 @@
       curQuarterLabel = curQMonths.length ? `Q${q} ${state.year}` : `FY${state.year}`;
       prevLabel = `Q${pq.quarter} ${pq.year}`;
       statLabel = `${state.year} — full year`;
-    } else if(state.period === "month"){
+    } else if(g === "month"){
       const m = getMonthEntry(state.year, state.month);
       rows = m ? aggregateBrands([m], tolerance) : [];
       curStats = statsOf(rows);
@@ -564,13 +629,27 @@
     }
 
     state.lastRows = rows;
+    const showAssignee = g==="year" ? state.year>=2026 : isAssigneeEligible(state.year, state.month);
     contentEl.innerHTML = `
       <div class="section-title">${statLabel} <span class="pill">${rows.length} brands tracked</span></div>
+      <div class="subnav" id="reportSubnav">
+        <button data-reportperiod="year" class="${g==="year"?"active":""}">Year</button>
+        <button data-reportperiod="month" class="${g==="month"?"active":""}">Month</button>
+        <button data-reportperiod="week" class="${g==="week"?"active":""}">Week</button>
+      </div>
+      <div id="reportControlsSlot"></div>
       ${renderStatCards(curStats, cumAvg)}
       ${renderQuarterCompare(curStats, prevStats, curQuarterLabel, prevLabel)}
       <div class="section-title">Brand detail</div>
-      ${renderTable(rows, approvedLabel)}
+      ${renderTable(rows, approvedLabel, {showAssignee})}
     `;
+    // The Year/Month/Week value selectors live only here, right under the granularity toggle —
+    // not duplicated at the top of the page.
+    document.getElementById("reportControlsSlot").appendChild(selectorGroup);
+    clientWrap.style.display = "none";
+    yearWrap.style.display = "flex";
+    monthWrap.style.display = (g==="month"||g==="week") ? "flex" : "none";
+    weekWrap.style.display = (g==="week") ? "flex" : "none";
   }
 
   // ---------- Snapshot: a genuinely different, at-a-glance concise summary ----------
@@ -581,6 +660,7 @@
     return state.data.months[state.data.months.length-1];
   }
   function renderSnapshotPage(){
+    hideAllSelectors();
     const m = latestAvailableMonth();
     if(!m){ contentEl.innerHTML = `<div class="empty">No data available yet.</div>`; return; }
     const tolerance = state.tolerance;
@@ -623,6 +703,7 @@
 
   // ---------- Overview: all-time trend across every period, one row per month, color-coded ----------
   function renderOverviewPage(){
+    hideAllSelectors();
     const tolerance = state.tolerance;
     const perMonth = state.data.months.map(m=>{
       const rows = aggregateBrands([m], tolerance);
@@ -669,8 +750,14 @@
     const prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
     contentEl.innerHTML = `
       <div class="section-title">Quarter Compare <span class="pill">${state.year} — most recent quarter vs previous</span></div>
+      <div id="qcompareControlsSlot"></div>
       ${renderQuarterCompare(curStats, prevStats, `Q${q} ${state.year}`, `Q${pq.quarter} ${pq.year}`)}
     `;
+    document.getElementById("qcompareControlsSlot").appendChild(selectorGroup);
+    clientWrap.style.display = "none";
+    yearWrap.style.display = "flex";
+    monthWrap.style.display = "none";
+    weekWrap.style.display = "none";
   }
 
   // ---------- By Client: pick one brand, browse it by year / month / week ----------
@@ -748,6 +835,98 @@
     // Move the shared Year/Month/Week/Client selectors into this page, right under the
     // Full Year / Single Month / Week-to-date toggle — nowhere else on screen shows them.
     document.getElementById("clientControlsSlot").appendChild(selectorGroup);
+    clientWrap.style.display = "flex";
+    yearWrap.style.display = "flex";
+    monthWrap.style.display = (state.clientPeriod==="month"||state.clientPeriod==="week") ? "flex" : "none";
+    weekWrap.style.display = (state.clientPeriod==="week") ? "flex" : "none";
+  }
+
+  // ---------- By Assignee: who's responsible for how many clients, and their status mix.
+  // Assignee tracking only started with the July 2026 tracker, so this page only ever offers
+  // periods from July 2026 onward. ----------
+  function eligibleAssigneeMonths(){
+    if(!state.data) return [];
+    return state.data.months.filter(m=>isAssigneeEligible(m.year, m.month));
+  }
+  function renderAssigneePage(){
+    hideAllSelectors();
+    const eligible = eligibleAssigneeMonths();
+    if(!eligible.length){
+      contentEl.innerHTML = `<div class="empty">Assignee tracking starts with the July 2026 tracker — no eligible periods yet.</div>`;
+      return;
+    }
+    if(!state.assigneePeriod || !eligible.some(m=>`${m.year}-${m.month}`===state.assigneePeriod)){
+      const latest = eligible[eligible.length-1];
+      state.assigneePeriod = `${latest.year}-${latest.month}`;
+    }
+    const [ay, am] = state.assigneePeriod.split("-").map(Number);
+    const monthEntry = getMonthEntry(ay, am);
+    const tolerance = state.tolerance;
+    const rows = monthEntry ? aggregateBrands([monthEntry], tolerance) : [];
+
+    // Group brands by assignee (a brand with several assignees counts under each of them).
+    const byAssignee = new Map();
+    for(const r of rows){
+      const names = (r.assignees && r.assignees.length) ? r.assignees : ["Unassigned"];
+      for(const name of names){
+        if(!byAssignee.has(name)) byAssignee.set(name, []);
+        byAssignee.get(name).push(r);
+      }
+    }
+    const summary = [...byAssignee.entries()].map(([name, clients])=>{
+      const s = statsOf(clients);
+      return { name, clients, clientCount: clients.length, ...s };
+    }).sort((a,b)=> b.clientCount - a.clientCount);
+
+    state.lastRows = rows;
+    contentEl.innerHTML = `
+      <div class="section-title">By Assignee <span class="pill">${MONTH_NAMES[am]} ${ay}</span></div>
+      <div class="assignee-month-picker">
+        <label>Month
+          <select id="assigneeMonthSelect">
+            ${eligible.map(m=>`<option value="${m.year}-${m.month}" ${(`${m.year}-${m.month}`===state.assigneePeriod)?"selected":""}>${MONTH_NAMES[m.month]} ${m.year}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <table class="trend-table" id="assigneeSummaryTable">
+        <thead><tr>
+          <th>Assignee</th><th class="num-cell"># Clients</th>
+          <th class="num-cell"><i class="dot over"></i>Overspend</th>
+          <th class="num-cell"><i class="dot under"></i>Underspend</th>
+          <th class="num-cell"><i class="dot target"></i>On Target</th>
+        </tr></thead>
+        <tbody>
+          ${summary.map(a=>`<tr class="assignee-row" data-assignee="${a.name}" style="cursor:pointer">
+            <td class="brand-name">${a.name} <span class="pill" style="margin-left:6px;">click to view clients ›</span></td>
+            <td class="num-cell">${a.clientCount}</td>
+            <td class="num-cell"><span class="${a.overCount>0?"text-over":"text-zero"}">${a.overCount}</span></td>
+            <td class="num-cell"><span class="${a.underCount>0?"text-under":"text-zero"}">${a.underCount}</span></td>
+            <td class="num-cell"><span class="${a.targetCount>0?"text-target":"text-zero"}">${a.targetCount}</span></td>
+          </tr>${state.drillAssignee===a.name ? `<tr><td colspan="5" style="padding:0;">${renderAssigneeDrill(a)}</td></tr>` : ""}`).join("")}
+        </tbody>
+      </table>
+    `;
+    document.getElementById("assigneeMonthSelect").addEventListener("change", (e)=>{
+      state.assigneePeriod = e.target.value;
+      state.drillAssignee = null;
+      render();
+    });
+  }
+  function renderAssigneeDrill(a){
+    return `<div class="drill-panel" style="margin:8px 0;">
+      <div class="drill-head"><span>${a.name} — ${a.clientCount} client${a.clientCount===1?"":"s"}</span></div>
+      <table>
+        <thead><tr><th>Brand</th><th class="num-cell">Approved</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
+        <tbody>${a.clients.map(c=>`<tr>
+          <td class="brand-name">${c.name}</td>
+          <td class="num-cell">${fmtMoney(c.approved)}</td>
+          <td class="num-cell">${fmtMoney(c.actual)}</td>
+          <td class="num-cell"><span class="${c.status==="Overspend"?"text-over":c.status==="Underspend"?"text-under":"text-target"}">${fmtMoney(c.uoSpend)}</span></td>
+          <td class="num-cell">${fmtPct(c.usagePct)}</td>
+          <td><span class="badge ${badgeClass(c.status)}">${c.status}</span></td>
+        </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
   }
 
   function populateSelectors(){
@@ -786,33 +965,18 @@
     });
   }
 
-  // Show/hide the shared Year / Month / Week / Client controls depending on which tab is active.
-  function updateControlsVisibility(){
-    const p = state.period;
-    clientWrap.style.display = (p==="client") ? "flex" : "none";
-    yearWrap.style.display = (p==="snapshot"||p==="overview") ? "none" : "flex";
-    if(p==="client"){
-      monthWrap.style.display = (state.clientPeriod==="month"||state.clientPeriod==="week") ? "flex" : "none";
-      weekWrap.style.display = (state.clientPeriod==="week") ? "flex" : "none";
-    } else {
-      monthWrap.style.display = (p==="month"||p==="week") ? "flex" : "none";
-      weekWrap.style.display = (p==="week") ? "flex" : "none";
-    }
-  }
-
   document.getElementById("periodTabs").addEventListener("click", (e)=>{
-    const btn = e.target.closest("button[data-period]");
+    const btn = e.target.closest("button[data-tab]");
     if(!btn) return;
     document.querySelectorAll("#periodTabs button").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
-    state.period = btn.dataset.period;
+    state.tab = btn.dataset.tab;
     state.drillStatus = null;
-    updateControlsVisibility();
     render();
   });
 
   // Delegated clicks inside the content area: stat-card drill-down, drill-panel close,
-  // and the By Client sub-nav (Year/Month/Week scoped to one brand).
+  // the Report page's own Year/Month/Week toggle, and the By Client sub-nav.
   contentEl.addEventListener("click", (e)=>{
     const closeBtn = e.target.closest("[data-drill-close]");
     if(closeBtn){ state.drillStatus = null; render(); return; }
@@ -825,10 +989,24 @@
       return;
     }
 
+    const reportBtn = e.target.closest("#reportSubnav button[data-reportperiod]");
+    if(reportBtn){
+      state.reportGranularity = reportBtn.dataset.reportperiod;
+      render();
+      return;
+    }
+
     const subBtn = e.target.closest("#clientSubnav button[data-clientperiod]");
     if(subBtn){
       state.clientPeriod = subBtn.dataset.clientperiod;
-      updateControlsVisibility();
+      render();
+      return;
+    }
+
+    const assigneeRow = e.target.closest("tr.assignee-row[data-assignee]");
+    if(assigneeRow){
+      const name = assigneeRow.dataset.assignee;
+      state.drillAssignee = (state.drillAssignee === name) ? null : name;
       render();
       return;
     }
