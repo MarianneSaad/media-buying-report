@@ -313,7 +313,7 @@
       <option value="2">Week 2</option>
       <option value="3">Week 3</option>
       <option value="4">Week 4</option>
-      <option value="5" selected>Week 5 (full month)</option>
+      <option value="5" selected>Week 5</option>
     </select>
   </span>
 </div>
@@ -995,7 +995,7 @@
             <option value="2" ${week===2?"selected":""}>Week 2</option>
             <option value="3" ${week===3?"selected":""}>Week 3</option>
             <option value="4" ${week===4?"selected":""}>Week 4</option>
-            <option value="5" ${week===5?"selected":""}>Week 5 (full month)</option>
+            <option value="5" ${week===5?"selected":""}>Week 5</option>
           </select>
         <span class="period-pill">${periodLabel}</span>
       </div>
@@ -1028,6 +1028,7 @@
     if(weekSel){
       weekSel.addEventListener("change", (e)=>{
         state.assigneeWeek = Number(e.target.value);
+        state.assigneeGranularity = "week";
         render();
       });
     }
@@ -1121,12 +1122,20 @@
       refreshMonthOptions();
       render();
     });
+    // Picking a value in the Month/Week dropdown should actually switch the page into that
+    // granularity — otherwise the selector visibly changes but the report below it (which was
+    // still reading Year-mode data) never moves, which is exactly the "dropdown does nothing"
+    // bug. Only Report and By Client actually have a granularity concept to switch.
     monthSelect.addEventListener("change", ()=>{
       state.month = Number(monthSelect.value);
+      if(state.tab === "report") state.reportGranularity = "month";
+      if(state.tab === "client") state.clientPeriod = "month";
       render();
     });
     weekSelect.addEventListener("change", ()=>{
       state.week = Number(weekSelect.value);
+      if(state.tab === "report") state.reportGranularity = "week";
+      if(state.tab === "client") state.clientPeriod = "week";
       render();
     });
     clientSelect.addEventListener("change", ()=>{
