@@ -79,6 +79,8 @@
     background:#fff; font-weight:600;
   }
   .controls label{font-size:12.5px; color:var(--muted); font-weight:700; display:flex; align-items:center; gap:8px;}
+  .selector-group{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  #clientControlsSlot .selector-group{margin:2px 0 24px 0;}
   .refresh-btn{
     margin-left:auto; border:1px solid var(--border); background:#fff; border-radius:9px; padding:9px 16px;
     font-weight:700; font-size:13px; cursor:pointer; color:var(--ink);
@@ -141,7 +143,7 @@
   .empty, .loading, .error{padding:40px; text-align:center; color:var(--muted); font-size:14px;}
   .error{color:var(--red); font-weight:700;}
 
-  /* ---------- Sub-nav (used inside Quarter Compare / By Client pages) ---------- */
+  /* ---------- Sub-nav (used inside By Client page) ---------- */
   .subnav{display:flex; gap:6px; margin:0 0 18px 0;}
   .subnav button{
     border:1px solid var(--border); background:#fff; color:var(--muted); font-weight:700; font-size:12.5px;
@@ -160,8 +162,45 @@
   }
   .drill-panel .drill-close{cursor:pointer; color:var(--muted); font-weight:700;}
 
-  /* ---------- Overview trend table ---------- */
+  /* ---------- Overview trend table (color-coded + latest-row highlight) ---------- */
   .trend-table td, .trend-table th{padding:9px 12px;}
+  .trend-table th .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
+  .dot.over{background:var(--red);} .dot.under{background:var(--orange);} .dot.target{background:var(--green);}
+  .text-over{color:var(--red); font-weight:800;}
+  .text-under{color:var(--orange); font-weight:800;}
+  .text-target{color:var(--green); font-weight:800;}
+  .text-zero{color:#c7c9d4; font-weight:600;}
+  .trend-table tr.row-latest{background:var(--card);}
+  .trend-table tr.row-latest td:first-child{font-weight:800;}
+  .latest-pill{font-size:9.5px; font-weight:800; color:var(--purple); background:#f1e6f5; border-radius:100px; padding:2px 8px; margin-left:8px; text-transform:uppercase; letter-spacing:.3px;}
+
+  /* ---------- Snapshot: health bar + top movers ---------- */
+  .health-bar{display:flex; height:16px; border-radius:100px; overflow:hidden; background:var(--border); margin:20px 0 12px 0;}
+  .health-bar .seg{height:100%;}
+  .health-bar .seg.over{background:var(--red);}
+  .health-bar .seg.under{background:var(--orange);}
+  .health-bar .seg.target{background:var(--green);}
+  .health-legend{display:flex; gap:22px; margin-bottom:30px; font-size:13px; font-weight:700; color:var(--ink);}
+  .health-legend .dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px;}
+  .top-lists{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:10px;}
+  .top-list{border:1px solid var(--border); border-radius:12px; padding:16px 18px;}
+  .top-list h3{margin:0 0 12px 0; font-size:13px; text-transform:uppercase; letter-spacing:.4px;}
+  .top-list h3.over{color:var(--red);} .top-list h3.under{color:var(--orange);}
+  .top-row{display:flex; justify-content:space-between; font-size:13.5px; padding:7px 0; border-bottom:1px dashed var(--border);}
+  .top-row:last-child{border-bottom:none;}
+  .top-row b.over{color:var(--red);} .top-row b.under{color:var(--orange);}
+  .empty.small{padding:14px 0; font-size:13px;}
+
+  /* ---------- Quarter compare: colored metrics + deltas ---------- */
+  .qcard{border-left-width:5px; border-left-style:solid; border-left-color:var(--muted);}
+  .qcard.current{border-left-color:var(--purple);}
+  .qcard .row{display:flex; justify-content:space-between; align-items:baseline;}
+  .qcard .row .val{display:flex; align-items:baseline; gap:7px;}
+  .qcard .row b.over{color:var(--red);}
+  .qcard .row b.under{color:var(--orange);}
+  .qcard .row b.target{color:var(--green);}
+  .qcard .row b.uo{color:var(--purple);}
+  .qcard .delta{font-size:10.5px; color:var(--muted); font-weight:700; white-space:nowrap;}
 
   /* ---------- Footer ---------- */
   footer.site{
@@ -199,25 +238,27 @@
   </div>
 </header>
 
-<div class="controls">
-  <label id="clientWrap" style="display:none">Client
-    <select id="clientSelect"></select>
-  </label>
-  <label id="yearWrap">Year
-    <select id="yearSelect"></select>
-  </label>
-  <label id="monthWrap" style="display:none">Month
-    <select id="monthSelect"></select>
-  </label>
-  <label id="weekWrap" style="display:none">Week
-    <select id="weekSelect">
-      <option value="1">Week 1</option>
-      <option value="2">Week 2</option>
-      <option value="3">Week 3</option>
-      <option value="4">Week 4</option>
-      <option value="5" selected>Week 5 (full month)</option>
-    </select>
-  </label>
+<div class="controls" id="controlsBar">
+  <div class="selector-group" id="selectorGroup">
+    <label id="clientWrap" style="display:none">Client
+      <select id="clientSelect"></select>
+    </label>
+    <label id="yearWrap">Year
+      <select id="yearSelect"></select>
+    </label>
+    <label id="monthWrap" style="display:none">Month
+      <select id="monthSelect"></select>
+    </label>
+    <label id="weekWrap" style="display:none">Week
+      <select id="weekSelect">
+        <option value="1">Week 1</option>
+        <option value="2">Week 2</option>
+        <option value="3">Week 3</option>
+        <option value="4">Week 4</option>
+        <option value="5" selected>Week 5 (full month)</option>
+      </select>
+    </label>
+  </div>
   <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
 </div>
 
@@ -238,6 +279,8 @@
     clientPeriod: "year", selectedClient: null, drillStatus: null, lastRows: [] };
 
   const contentEl = document.getElementById("content");
+  const controlsBar = document.getElementById("controlsBar");
+  const selectorGroup = document.getElementById("selectorGroup");
   const yearSelect = document.getElementById("yearSelect");
   const monthSelect = document.getElementById("monthSelect");
   const weekSelect = document.getElementById("weekSelect");
@@ -247,6 +290,14 @@
   const weekWrap = document.getElementById("weekWrap");
   const clientWrap = document.getElementById("clientWrap");
   const refreshBtn = document.getElementById("refreshBtn");
+
+  // The Year/Month/Week/Client selectors are one shared DOM node group (selectorGroup) that gets
+  // physically relocated: normally it lives in the top controls bar, but on the "By Client" page
+  // it moves inside the page content itself (next to the client's own Year/Month/Week toggle) so
+  // the same controls aren't shown in two places on screen at once.
+  function dockSelectorGroupToTopBar(){
+    controlsBar.insertBefore(selectorGroup, refreshBtn);
+  }
 
   const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -411,17 +462,28 @@
   }
 
   function renderQuarterCompare(currentStats, prevStats, curLabel, prevLabel){
-    function rows(s){
-      return `
-        <div class="row"><span>Avg Overspend</span><b>${fmtMoney(s.avgOverspend)}</b></div>
-        <div class="row"><span>Avg Underspend</span><b>${fmtMoney(s.avgUnderspend)}</b></div>
-        <div class="row"><span>Avg On Target</span><b>${fmtMoney(s.avgOnTarget)}</b></div>
-        <div class="row"><span>Avg U/O Spend</span><b>${fmtMoney(s.avgUOSpend)}</b></div>`;
+    function deltaHtml(curVal, prevVal){
+      if(curVal===null||prevVal===null||!isFinite(curVal)||!isFinite(prevVal)) return "";
+      const d = curVal - prevVal;
+      if(Math.abs(d) < 0.5) return `<span class="delta">no change</span>`;
+      return `<span class="delta">${d>0?"▲ +":"▼ -"}${fmtMoney(Math.abs(d)).replace("$","$")} vs prev</span>`;
+    }
+    function rows(s, isCurrent){
+      const metrics = [
+        {label:"Avg Overspend", val:s.avgOverspend, prevVal:prevStats.avgOverspend, cls:"over"},
+        {label:"Avg Underspend", val:s.avgUnderspend, prevVal:prevStats.avgUnderspend, cls:"under"},
+        {label:"Avg On Target", val:s.avgOnTarget, prevVal:prevStats.avgOnTarget, cls:"target"},
+        {label:"Avg U/O Spend", val:s.avgUOSpend, prevVal:prevStats.avgUOSpend, cls:"uo"},
+      ];
+      return metrics.map(m=>`
+        <div class="row"><span>${m.label}</span>
+          <span class="val"><b class="${m.cls}">${fmtMoney(m.val)}</b>${isCurrent ? deltaHtml(m.val, m.prevVal) : ""}</span>
+        </div>`).join("");
     }
     return `<div class="section-title">Quarter comparison <span class="pill">${prevLabel} vs ${curLabel}</span></div>
       <div class="quarter-compare">
-        <div class="qcard"><h3>${prevLabel} (Previous Quarter Avgs)</h3>${rows(prevStats)}</div>
-        <div class="qcard"><h3>${curLabel} (Current Quarter)</h3>${rows(currentStats)}</div>
+        <div class="qcard"><h3>${prevLabel} (Previous Quarter Avgs)</h3>${rows(prevStats,false)}</div>
+        <div class="qcard current"><h3>${curLabel} (Current Quarter)</h3>${rows(currentStats,true)}</div>
       </div>`;
   }
 
@@ -446,6 +508,9 @@
   }
 
   function render(){
+    // Always re-dock the shared selectors to the top bar first — safe even if they're already
+    // there, and required before wiping innerHTML on a page that had them moved into its content.
+    dockSelectorGroupToTopBar();
     if(!state.data){ contentEl.innerHTML = `<div class="loading">Loading live data from ClickUp…</div>`; return; }
 
     if(state.period === "snapshot") return renderSnapshotPage();
@@ -508,7 +573,9 @@
     `;
   }
 
-  // ---------- Snapshot: concise current-period summary, stat cards only, no table ----------
+  // ---------- Snapshot: a genuinely different, at-a-glance concise summary ----------
+  // (a proportion bar + biggest movers — deliberately NOT the same stat-cards/quarter-compare
+  // layout used by Year/Month/Week, so this page tells you something new in one glance.)
   function latestAvailableMonth(){
     if(!state.data || !state.data.months.length) return null;
     return state.data.months[state.data.months.length-1];
@@ -518,21 +585,43 @@
     if(!m){ contentEl.innerHTML = `<div class="empty">No data available yet.</div>`; return; }
     const tolerance = state.tolerance;
     const rows = aggregateBrands([m], tolerance);
-    const curStats = statsOf(rows);
-    const cumAvg = cumulativeAvgUOSpend(m.year, m.month);
-    const q = quarterOf(m.month);
-    const pq = prevQuarter(m.year, q);
-    const prevQMonths = monthsInQuarter(pq.year, pq.quarter).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
-    const prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
+    const stats = statsOf(rows);
+    const total = rows.length || 1;
+    const overPct = stats.overCount/total*100;
+    const underPct = stats.underCount/total*100;
+    const targetPct = stats.targetCount/total*100;
+
+    const topOver = rows.filter(r=>r.status==="Overspend").sort((a,b)=>a.uoSpend-b.uoSpend).slice(0,5);
+    const topUnder = rows.filter(r=>r.status==="Underspend").sort((a,b)=>b.uoSpend-a.uoSpend).slice(0,5);
+
     state.lastRows = rows;
     contentEl.innerHTML = `
       <div class="section-title">Snapshot <span class="pill">${MONTH_NAMES[m.month]} ${m.year} — most recent period</span></div>
-      ${renderStatCards(curStats, cumAvg)}
-      ${renderQuarterCompare(curStats, prevStats, `Q${q} ${m.year}`, `Q${pq.quarter} ${pq.year}`)}
+      <div class="health-bar">
+        ${stats.overCount ? `<div class="seg over" style="width:${overPct}%"></div>` : ""}
+        ${stats.underCount ? `<div class="seg under" style="width:${underPct}%"></div>` : ""}
+        ${stats.targetCount ? `<div class="seg target" style="width:${targetPct}%"></div>` : ""}
+      </div>
+      <div class="health-legend">
+        <span><i class="dot over"></i>${stats.overCount} Overspend</span>
+        <span><i class="dot under"></i>${stats.underCount} Underspend</span>
+        <span><i class="dot target"></i>${stats.targetCount} On Target</span>
+        <span style="color:var(--muted); font-weight:600;">out of ${rows.length} brands tracked</span>
+      </div>
+      <div class="top-lists">
+        <div class="top-list">
+          <h3 class="over">Biggest Overspends</h3>
+          ${topOver.length ? topOver.map(r=>`<div class="top-row"><span>${r.name}</span><b class="over">${fmtMoney(r.uoSpend)}</b></div>`).join("") : `<div class="empty small">No overspends this period.</div>`}
+        </div>
+        <div class="top-list">
+          <h3 class="under">Biggest Underspends</h3>
+          ${topUnder.length ? topUnder.map(r=>`<div class="top-row"><span>${r.name}</span><b class="under">${fmtMoney(r.uoSpend)}</b></div>`).join("") : `<div class="empty small">No underspends this period.</div>`}
+        </div>
+      </div>
     `;
   }
 
-  // ---------- Overview: all-time trend across every period, one row per month ----------
+  // ---------- Overview: all-time trend across every period, one row per month, color-coded ----------
   function renderOverviewPage(){
     const tolerance = state.tolerance;
     const perMonth = state.data.months.map(m=>{
@@ -544,18 +633,24 @@
       <div class="section-title">All-time overview <span class="pill">${perMonth.length} periods · ${PERIODS.length} months tracked total</span></div>
       <table class="trend-table">
         <thead><tr>
-          <th>Period</th><th class="num-cell">Brands</th><th class="num-cell">Overspend</th>
-          <th class="num-cell">Underspend</th><th class="num-cell">On Target</th><th class="num-cell">Avg U/O Spend</th>
+          <th>Period</th><th class="num-cell">Brands</th>
+          <th class="num-cell"><i class="dot over"></i>Overspend</th>
+          <th class="num-cell"><i class="dot under"></i>Underspend</th>
+          <th class="num-cell"><i class="dot target"></i>On Target</th>
+          <th class="num-cell">Avg U/O Spend</th>
         </tr></thead>
         <tbody>
-          ${perMonth.map(p=>`<tr>
-            <td class="brand-name">${p.label}</td>
+          ${perMonth.map((p,idx)=>{
+            const isLatest = idx === perMonth.length-1;
+            return `<tr class="${isLatest?"row-latest":""}">
+            <td class="brand-name">${p.label}${isLatest?`<span class="latest-pill">Latest</span>`:""}</td>
             <td class="num-cell">${p.brandCount}</td>
-            <td class="num-cell">${p.overCount}</td>
-            <td class="num-cell">${p.underCount}</td>
-            <td class="num-cell">${p.targetCount}</td>
-            <td class="num-cell">${fmtMoney(p.avgUOSpend)}</td>
-          </tr>`).join("")}
+            <td class="num-cell"><span class="${p.overCount>0?"text-over":"text-zero"}">${p.overCount}</span></td>
+            <td class="num-cell"><span class="${p.underCount>0?"text-under":"text-zero"}">${p.underCount}</span></td>
+            <td class="num-cell"><span class="${p.targetCount>0?"text-target":"text-zero"}">${p.targetCount}</span></td>
+            <td class="num-cell"><span class="${p.avgUOSpend===null?"":(p.avgUOSpend>=0?"text-target":"text-over")}">${fmtMoney(p.avgUOSpend)}</span></td>
+          </tr>`;
+          }).join("")}
         </tbody>
       </table>
     `;
@@ -613,6 +708,8 @@
       label = `${MONTH_NAMES[state.month]} ${state.year} — through Week ${state.week}`;
       approvedLabel = `Prorated Target (Wk ${state.week})`;
     }
+    const statusCls = row ? badgeClass(row.status) : "";
+    const cardCls = statusCls === "over" ? "c4" : statusCls === "under" ? "c3" : statusCls === "target" ? "c5" : "c1";
 
     // Full history trend for this one client, across every period on record.
     const history = state.data.months.map(m=>{
@@ -623,11 +720,18 @@
     contentEl.innerHTML = `
       <div class="section-title">${client} <span class="pill">${label}</span></div>
       <div class="subnav" id="clientSubnav">
-        <button data-clientperiod="year" class="${state.clientPeriod==="year"?"active":""}">Year</button>
-        <button data-clientperiod="month" class="${state.clientPeriod==="month"?"active":""}">Month</button>
-        <button data-clientperiod="week" class="${state.clientPeriod==="week"?"active":""}">Week</button>
+        <button data-clientperiod="year" class="${state.clientPeriod==="year"?"active":""}">Full Year</button>
+        <button data-clientperiod="month" class="${state.clientPeriod==="month"?"active":""}">Single Month</button>
+        <button data-clientperiod="week" class="${state.clientPeriod==="week"?"active":""}">Week-to-date</button>
       </div>
-      ${renderTable(row ? [row] : [], approvedLabel)}
+      <div id="clientControlsSlot"></div>
+      <div class="stat-grid">
+        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${row ? row.status : "—"}</div><div class="lbl">Status</div></div>
+        <div class="stat-card c1"><div class="num">${fmtMoney(row ? row.approved : null)}</div><div class="lbl">${approvedLabel}</div></div>
+        <div class="stat-card c2"><div class="num">${fmtMoney(row ? row.actual : null)}</div><div class="lbl">Actual Spend</div></div>
+        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtMoney(row ? row.uoSpend : null)}</div><div class="lbl">U/O Spend $</div></div>
+        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtPct(row ? row.usagePct : null)}</div><div class="lbl">Usage %</div></div>
+      </div>
       <div class="section-title">History <span class="pill">${history.length} periods tracked for ${client}</span></div>
       <table class="trend-table">
         <thead><tr><th>Period</th><th class="num-cell">Approved</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
@@ -635,12 +739,15 @@
           <td class="brand-name">${h.label}</td>
           <td class="num-cell">${fmtMoney(h.approved)}</td>
           <td class="num-cell">${fmtMoney(h.actual)}</td>
-          <td class="num-cell">${fmtMoney(h.uoSpend)}</td>
+          <td class="num-cell"><span class="${h.status==="Overspend"?"text-over":h.status==="Underspend"?"text-under":"text-target"}">${fmtMoney(h.uoSpend)}</span></td>
           <td class="num-cell">${fmtPct(h.usagePct)}</td>
           <td><span class="badge ${badgeClass(h.status)}">${h.status}</span></td>
         </tr>`).join("")}</tbody>
       </table>
     `;
+    // Move the shared Year/Month/Week/Client selectors into this page, right under the
+    // Full Year / Single Month / Week-to-date toggle — nowhere else on screen shows them.
+    document.getElementById("clientControlsSlot").appendChild(selectorGroup);
   }
 
   function populateSelectors(){
