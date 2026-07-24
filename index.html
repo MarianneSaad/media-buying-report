@@ -141,6 +141,28 @@
   .empty, .loading, .error{padding:40px; text-align:center; color:var(--muted); font-size:14px;}
   .error{color:var(--red); font-weight:700;}
 
+  /* ---------- Sub-nav (used inside Quarter Compare / By Client pages) ---------- */
+  .subnav{display:flex; gap:6px; margin:0 0 18px 0;}
+  .subnav button{
+    border:1px solid var(--border); background:#fff; color:var(--muted); font-weight:700; font-size:12.5px;
+    padding:7px 14px; border-radius:8px; cursor:pointer;
+  }
+  .subnav button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .subnav button:hover:not(.active){background:var(--card);}
+
+  /* ---------- Clickable stat cards + drill-down ---------- */
+  .stat-card.clickable{cursor:pointer; position:relative;}
+  .stat-card.clickable:hover{filter:brightness(0.97);}
+  .stat-card.clickable .hint{font-size:10.5px; color:var(--muted); font-weight:600; margin-top:2px;}
+  .drill-panel{border:1px solid var(--border); border-radius:12px; margin:-10px 0 26px 0; overflow:hidden;}
+  .drill-panel .drill-head{
+    padding:10px 16px; background:var(--card); font-size:12.5px; font-weight:800; display:flex; justify-content:space-between; align-items:center;
+  }
+  .drill-panel .drill-close{cursor:pointer; color:var(--muted); font-weight:700;}
+
+  /* ---------- Overview trend table ---------- */
+  .trend-table td, .trend-table th{padding:9px 12px;}
+
   /* ---------- Footer ---------- */
   footer.site{
     margin:28px 32px 32px 32px;
@@ -168,13 +190,20 @@
         <button data-period="year" class="active">Year</button>
         <button data-period="month">Month</button>
         <button data-period="week">Week</button>
+        <button data-period="snapshot">Snapshot</button>
+        <button data-period="overview">Overview</button>
+        <button data-period="qcompare">Quarter Compare</button>
+        <button data-period="client">By Client</button>
       </nav>
     </div>
   </div>
 </header>
 
 <div class="controls">
-  <label>Year
+  <label id="clientWrap" style="display:none">Client
+    <select id="clientSelect"></select>
+  </label>
+  <label id="yearWrap">Year
     <select id="yearSelect"></select>
   </label>
   <label id="monthWrap" style="display:none">Month
@@ -205,14 +234,18 @@
 
 <script>
 (function(){
-  const state = { period: "year", data: null, year: null, month: null, week: 5, tolerance: 5 };
+  const state = { period: "year", data: null, year: null, month: null, week: 5, tolerance: 5,
+    clientPeriod: "year", selectedClient: null, drillStatus: null, lastRows: [] };
 
   const contentEl = document.getElementById("content");
   const yearSelect = document.getElementById("yearSelect");
   const monthSelect = document.getElementById("monthSelect");
   const weekSelect = document.getElementById("weekSelect");
+  const clientSelect = document.getElementById("clientSelect");
+  const yearWrap = document.getElementById("yearWrap");
   const monthWrap = document.getElementById("monthWrap");
   const weekWrap = document.getElementById("weekWrap");
+  const clientWrap = document.getElementById("clientWrap");
   const refreshBtn = document.getElementById("refreshBtn");
 
   const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -329,24 +362,52 @@
     return perMonthAvg.reduce((a,b)=>a+b,0)/perMonthAvg.length;
   }
 
-  function renderStatCards(stats, cumAvg, extra){
+  function renderStatCards(stats, cumAvg, opts){
+    const clickable = !opts || opts.clickable !== false;
     const cards = [
-      {cls:"c4", numCls:"over", label:"Overspend", value: stats.overCount + " brands"},
-      {cls:"c3", numCls:"under", label:"Underspend", value: stats.underCount + " brands"},
-      {cls:"c5", numCls:"target", label:"On Target", value: stats.targetCount + " brands"},
-      {cls:"c1", numCls:"", label:"Avg U/O Spend", value: fmtMoney(stats.avgUOSpend)},
-      {cls:"c2", numCls:"", label:"CUM AVG U/O Spend", value: fmtMoney(cumAvg)},
+      {cls:"c4", numCls:"over", label:"Overspend", value: stats.overCount + " brands", status:"Overspend"},
+      {cls:"c3", numCls:"under", label:"Underspend", value: stats.underCount + " brands", status:"Underspend"},
+      {cls:"c5", numCls:"target", label:"On Target", value: stats.targetCount + " brands", status:"On Target"},
+      {cls:"c1", numCls:"", label:"Avg U/O Spend", value: fmtMoney(stats.avgUOSpend), status:null},
+      {cls:"c2", numCls:"", label:"CUM AVG U/O Spend", value: fmtMoney(cumAvg), status:null},
     ];
-    return `<div class="stat-grid">${cards.map(c=>`
-      <div class="stat-card ${c.cls}">
+    const clickableCards = clickable ? cards.filter(c=>c.status) : [];
+    const html = `<div class="stat-grid">${cards.map(c=>{
+      const isClickable = clickable && c.status;
+      return `
+      <div class="stat-card ${c.cls}${isClickable ? " clickable" : ""}" ${isClickable ? `data-status="${c.status}"` : ""}>
         <div class="num ${c.numCls}">${c.value}</div>
         <div class="lbl">${c.label}</div>
-      </div>`).join("")}</div>
+        ${isClickable ? `<div class="hint">Click to view brands ›</div>` : ""}
+      </div>`;
+    }).join("")}</div>
+      ${state.drillStatus ? renderDrillPanel(state.drillStatus) : ""}
       <div class="stat-grid">
         <div class="stat-card c4"><div class="num over">${fmtMoney(stats.avgOverspend)}</div><div class="lbl">Avg Overspend</div></div>
         <div class="stat-card c3"><div class="num under">${fmtMoney(stats.avgUnderspend)}</div><div class="lbl">Avg Underspend</div></div>
         <div class="stat-card c5"><div class="num target">${fmtMoney(stats.avgOnTarget)}</div><div class="lbl">Avg On Target</div></div>
       </div>`;
+    return html;
+  }
+
+  // Inline drop-down list of brands belonging to the clicked status, drawn from whatever
+  // rows the currently-rendered view last computed (state.lastRows).
+  function renderDrillPanel(status){
+    const rows = state.lastRows.filter(r=>r.status===status);
+    return `<div class="drill-panel">
+      <div class="drill-head">
+        <span>${status} — ${rows.length} brand${rows.length===1?"":"s"}</span>
+        <span class="drill-close" data-drill-close="1">Close ✕</span>
+      </div>
+      ${rows.length ? `<table>
+        <thead><tr><th>Brand</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td class="brand-name">${r.name}</td>
+          <td class="num-cell">${fmtMoney(r.uoSpend)}</td>
+          <td class="num-cell">${fmtPct(r.usagePct)}</td>
+        </tr>`).join("")}</tbody>
+      </table>` : `<div class="empty">No brands in this category.</div>`}
+    </div>`;
   }
 
   function renderQuarterCompare(currentStats, prevStats, curLabel, prevLabel){
@@ -386,6 +447,12 @@
 
   function render(){
     if(!state.data){ contentEl.innerHTML = `<div class="loading">Loading live data from ClickUp…</div>`; return; }
+
+    if(state.period === "snapshot") return renderSnapshotPage();
+    if(state.period === "overview") return renderOverviewPage();
+    if(state.period === "qcompare") return renderQuarterComparePage();
+    if(state.period === "client") return renderClientPage();
+
     const tolerance = state.tolerance;
     let rows, statLabel, curQuarterLabel, curStats, prevStats, prevLabel, cumAvg, approvedLabel="Approved Spend";
 
@@ -431,12 +498,148 @@
       approvedLabel = `Prorated Target (Wk ${state.week})`;
     }
 
+    state.lastRows = rows;
     contentEl.innerHTML = `
       <div class="section-title">${statLabel} <span class="pill">${rows.length} brands tracked</span></div>
       ${renderStatCards(curStats, cumAvg)}
       ${renderQuarterCompare(curStats, prevStats, curQuarterLabel, prevLabel)}
       <div class="section-title">Brand detail</div>
       ${renderTable(rows, approvedLabel)}
+    `;
+  }
+
+  // ---------- Snapshot: concise current-period summary, stat cards only, no table ----------
+  function latestAvailableMonth(){
+    if(!state.data || !state.data.months.length) return null;
+    return state.data.months[state.data.months.length-1];
+  }
+  function renderSnapshotPage(){
+    const m = latestAvailableMonth();
+    if(!m){ contentEl.innerHTML = `<div class="empty">No data available yet.</div>`; return; }
+    const tolerance = state.tolerance;
+    const rows = aggregateBrands([m], tolerance);
+    const curStats = statsOf(rows);
+    const cumAvg = cumulativeAvgUOSpend(m.year, m.month);
+    const q = quarterOf(m.month);
+    const pq = prevQuarter(m.year, q);
+    const prevQMonths = monthsInQuarter(pq.year, pq.quarter).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+    const prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
+    state.lastRows = rows;
+    contentEl.innerHTML = `
+      <div class="section-title">Snapshot <span class="pill">${MONTH_NAMES[m.month]} ${m.year} — most recent period</span></div>
+      ${renderStatCards(curStats, cumAvg)}
+      ${renderQuarterCompare(curStats, prevStats, `Q${q} ${m.year}`, `Q${pq.quarter} ${pq.year}`)}
+    `;
+  }
+
+  // ---------- Overview: all-time trend across every period, one row per month ----------
+  function renderOverviewPage(){
+    const tolerance = state.tolerance;
+    const perMonth = state.data.months.map(m=>{
+      const rows = aggregateBrands([m], tolerance);
+      const s = statsOf(rows);
+      return {label:`${MONTH_NAMES[m.month]} ${m.year}`, ...s, brandCount: rows.length};
+    });
+    contentEl.innerHTML = `
+      <div class="section-title">All-time overview <span class="pill">${perMonth.length} periods · ${PERIODS.length} months tracked total</span></div>
+      <table class="trend-table">
+        <thead><tr>
+          <th>Period</th><th class="num-cell">Brands</th><th class="num-cell">Overspend</th>
+          <th class="num-cell">Underspend</th><th class="num-cell">On Target</th><th class="num-cell">Avg U/O Spend</th>
+        </tr></thead>
+        <tbody>
+          ${perMonth.map(p=>`<tr>
+            <td class="brand-name">${p.label}</td>
+            <td class="num-cell">${p.brandCount}</td>
+            <td class="num-cell">${p.overCount}</td>
+            <td class="num-cell">${p.underCount}</td>
+            <td class="num-cell">${p.targetCount}</td>
+            <td class="num-cell">${fmtMoney(p.avgUOSpend)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // ---------- Quarter Compare: standalone comparison, driven by the Year selector ----------
+  function renderQuarterComparePage(){
+    const tolerance = state.tolerance;
+    const monthsInYear = state.data.months.filter(m=>m.year===state.year);
+    const lastMonth = monthsInYear.length ? Math.max(...monthsInYear.map(m=>m.month)) : (latestAvailableMonth()||{month:1}).month;
+    const q = quarterOf(lastMonth);
+    const curQMonths = monthsInQuarter(state.year, q).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+    const pq = prevQuarter(state.year, q);
+    const prevQMonths = monthsInQuarter(pq.year, pq.quarter).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+    const curStats = statsOf(aggregateBrands(curQMonths, tolerance));
+    const prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
+    contentEl.innerHTML = `
+      <div class="section-title">Quarter Compare <span class="pill">${state.year} — most recent quarter vs previous</span></div>
+      ${renderQuarterCompare(curStats, prevStats, `Q${q} ${state.year}`, `Q${pq.quarter} ${pq.year}`)}
+    `;
+  }
+
+  // ---------- By Client: pick one brand, browse it by year / month / week ----------
+  function allClientNames(){
+    if(!state.data) return [];
+    const set = new Set();
+    state.data.months.forEach(m=>m.brands.forEach(b=>set.add(b.name)));
+    return [...set].sort();
+  }
+  function populateClientSelect(){
+    const names = allClientNames();
+    clientSelect.innerHTML = names.map(n=>`<option value="${n}">${n}</option>`).join("");
+    if(!state.selectedClient || !names.includes(state.selectedClient)) state.selectedClient = names[0] || null;
+    if(state.selectedClient) clientSelect.value = state.selectedClient;
+  }
+  function renderClientPage(){
+    const names = allClientNames();
+    if(!names.length){ contentEl.innerHTML = `<div class="empty">No brand data available yet.</div>`; return; }
+    if(!state.selectedClient) state.selectedClient = names[0];
+    const client = state.selectedClient;
+    const tolerance = state.tolerance;
+
+    let row, label, approvedLabel = "Approved Spend";
+    if(state.clientPeriod === "year"){
+      const monthsInYear = state.data.months.filter(m=>m.year===state.year);
+      row = aggregateBrands(monthsInYear, tolerance).find(r=>r.name===client);
+      label = `${state.year} — full year`;
+    } else if(state.clientPeriod === "month"){
+      const m = getMonthEntry(state.year, state.month);
+      row = m ? aggregateBrands([m], tolerance).find(r=>r.name===client) : null;
+      label = `${MONTH_NAMES[state.month]} ${state.year}`;
+    } else {
+      const m = getMonthEntry(state.year, state.month);
+      row = weekBrands(m, state.week, tolerance).find(r=>r.name===client);
+      label = `${MONTH_NAMES[state.month]} ${state.year} — through Week ${state.week}`;
+      approvedLabel = `Prorated Target (Wk ${state.week})`;
+    }
+
+    // Full history trend for this one client, across every period on record.
+    const history = state.data.months.map(m=>{
+      const r = aggregateBrands([m], tolerance).find(x=>x.name===client);
+      return r ? {label:`${MONTH_NAMES[m.month]} ${m.year}`, ...r} : null;
+    }).filter(Boolean);
+
+    contentEl.innerHTML = `
+      <div class="section-title">${client} <span class="pill">${label}</span></div>
+      <div class="subnav" id="clientSubnav">
+        <button data-clientperiod="year" class="${state.clientPeriod==="year"?"active":""}">Year</button>
+        <button data-clientperiod="month" class="${state.clientPeriod==="month"?"active":""}">Month</button>
+        <button data-clientperiod="week" class="${state.clientPeriod==="week"?"active":""}">Week</button>
+      </div>
+      ${renderTable(row ? [row] : [], approvedLabel)}
+      <div class="section-title">History <span class="pill">${history.length} periods tracked for ${client}</span></div>
+      <table class="trend-table">
+        <thead><tr><th>Period</th><th class="num-cell">Approved</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
+        <tbody>${history.map(h=>`<tr>
+          <td class="brand-name">${h.label}</td>
+          <td class="num-cell">${fmtMoney(h.approved)}</td>
+          <td class="num-cell">${fmtMoney(h.actual)}</td>
+          <td class="num-cell">${fmtMoney(h.uoSpend)}</td>
+          <td class="num-cell">${fmtPct(h.usagePct)}</td>
+          <td><span class="badge ${badgeClass(h.status)}">${h.status}</span></td>
+        </tr>`).join("")}</tbody>
+      </table>
     `;
   }
 
@@ -470,6 +673,24 @@
       state.week = Number(weekSelect.value);
       render();
     });
+    clientSelect.addEventListener("change", ()=>{
+      state.selectedClient = clientSelect.value;
+      render();
+    });
+  }
+
+  // Show/hide the shared Year / Month / Week / Client controls depending on which tab is active.
+  function updateControlsVisibility(){
+    const p = state.period;
+    clientWrap.style.display = (p==="client") ? "flex" : "none";
+    yearWrap.style.display = (p==="snapshot"||p==="overview") ? "none" : "flex";
+    if(p==="client"){
+      monthWrap.style.display = (state.clientPeriod==="month"||state.clientPeriod==="week") ? "flex" : "none";
+      weekWrap.style.display = (state.clientPeriod==="week") ? "flex" : "none";
+    } else {
+      monthWrap.style.display = (p==="month"||p==="week") ? "flex" : "none";
+      weekWrap.style.display = (p==="week") ? "flex" : "none";
+    }
   }
 
   document.getElementById("periodTabs").addEventListener("click", (e)=>{
@@ -478,9 +699,32 @@
     document.querySelectorAll("#periodTabs button").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
     state.period = btn.dataset.period;
-    monthWrap.style.display = (state.period==="month"||state.period==="week") ? "flex" : "none";
-    weekWrap.style.display = (state.period==="week") ? "flex" : "none";
+    state.drillStatus = null;
+    updateControlsVisibility();
     render();
+  });
+
+  // Delegated clicks inside the content area: stat-card drill-down, drill-panel close,
+  // and the By Client sub-nav (Year/Month/Week scoped to one brand).
+  contentEl.addEventListener("click", (e)=>{
+    const closeBtn = e.target.closest("[data-drill-close]");
+    if(closeBtn){ state.drillStatus = null; render(); return; }
+
+    const statCard = e.target.closest(".stat-card[data-status]");
+    if(statCard){
+      const status = statCard.dataset.status;
+      state.drillStatus = (state.drillStatus === status) ? null : status;
+      render();
+      return;
+    }
+
+    const subBtn = e.target.closest("#clientSubnav button[data-clientperiod]");
+    if(subBtn){
+      state.clientPeriod = subBtn.dataset.clientperiod;
+      updateControlsVisibility();
+      render();
+      return;
+    }
   });
 
   async function load(){
@@ -490,6 +734,7 @@
       const json = await resp.json();
       if(!resp.ok) throw new Error(json.error || "Failed to load report");
       state.data = json;
+      populateClientSelect();
       render();
     }catch(err){
       contentEl.innerHTML = `<div class="error">Couldn't load data: ${err.message}</div>`;
