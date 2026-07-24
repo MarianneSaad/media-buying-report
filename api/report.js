@@ -153,6 +153,37 @@ export default async function handler(req, res) {
 
     months.sort((a, b) => (a.year - b.year) || (a.month - b.month));
 
+    // ClickUp's "Client / Brand" field is occasionally left blank on a single month's task even
+    // though the same brand has it set correctly in every other month (e.g. "Dairy Gold" is a
+    // Trade Kings brand, but if one month's task forgot the field, clientOf() falls back to using
+    // the brand's own name as its "client" for just that month -- fragmenting it into a fake
+    // standalone client that only has that one month of (usually empty) data). Fix this by voting:
+    // for each brand name, use whichever real client value shows up most often across every month
+    // on record, and apply that consistently everywhere instead of trusting each month in isolation.
+    const clientVotes = new Map(); // brand name -> Map(client name -> count)
+    for (const m of months) {
+      for (const b of m.brands) {
+        if (!b.client || b.client === b.name) continue; // skip unset/self-fallback votes
+        if (!clientVotes.has(b.name)) clientVotes.set(b.name, new Map());
+        const votes = clientVotes.get(b.name);
+        votes.set(b.client, (votes.get(b.client) || 0) + 1);
+      }
+    }
+    const canonicalClient = new Map();
+    for (const [name, votes] of clientVotes) {
+      let best = null, bestCount = 0;
+      for (const [client, count] of votes) {
+        if (count > bestCount) { best = client; bestCount = count; }
+      }
+      canonicalClient.set(name, best);
+    }
+    for (const m of months) {
+      for (const b of m.brands) {
+        const canon = canonicalClient.get(b.name);
+        if (canon) b.client = canon;
+      }
+    }
+
     res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
     res.status(200).json({ generatedAt: new Date().toISOString(), months });
   } catch (err) {
