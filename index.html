@@ -141,6 +141,10 @@
   .quarter-compare{
     display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:26px;
   }
+  /* Quarter Compare tab: one card per available quarter in the selected year (not just two). */
+  .quarters-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:16px; margin-bottom:26px;
+  }
   .qcard{border:1px solid var(--border); border-radius:12px; padding:16px 18px;}
   .qcard h3{margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted);}
   .qcard .row{display:flex; justify-content:space-between; font-size:13.5px; padding:5px 0; border-bottom:1px dashed var(--border);}
@@ -334,7 +338,8 @@
 <script>
 (function(){
   const state = { tab: "report", reportGranularity: "year", data: null, year: null, month: null, week: 5, tolerance: 5,
-    clientPeriod: "year", selectedClient: null, drillStatus: null, lastRows: [],
+    clientPeriod: "year", clientViewMode: "brand", selectedClient: null, selectedClientGroup: null,
+    clientBrandDrillOpen: false, drillStatus: null, lastRows: [],
     assigneePeriod: null, drillAssignee: null, assigneeGranularity: "month", assigneeWeek: 5,
     overviewSort: { key: "period", dir: "desc" } };
 
@@ -406,7 +411,7 @@
     const map = new Map();
     for(const m of monthEntries){
       for(const b of m.brands){
-        if(!map.has(b.name)) map.set(b.name, {name:b.name, approved:0, actual:0, assignees:new Set()});
+        if(!map.has(b.name)) map.set(b.name, {name:b.name, approved:0, actual:0, assignees:new Set(), client:b.client||b.name});
         const agg = map.get(b.name);
         agg.approved += b.approved;
         agg.actual += b.actual;
@@ -432,7 +437,67 @@
       const uoSpend = target - cum;
       const usagePct = target > 0 ? (cum/target*100) : (cum>0?Infinity:null);
       const status = classify(usagePct, tolerance);
-      return {name:b.name, approved:target, actual:cum, uoSpend, usagePct, status, assignees:b.assignees||[]};
+      return {name:b.name, approved:target, actual:cum, uoSpend, usagePct, status, assignees:b.assignees||[], client:b.client||b.name};
+    });
+    rows.sort((a,b)=>a.name.localeCompare(b.name));
+    return rows;
+  }
+
+  // Client-level rollup: groups brands by the ClickUp "Client / Brand" field (e.g. every
+  // "Trade Kings..." brand rolls up under client "Trade Kings"; "Access Bank", "Access Bank
+  // Linkedin", "Access Bank W Community" all roll up under client "Access Bank"). Keeps the
+  // underlying per-brand breakdown too, so the client view can still show what it's made of.
+  function aggregateByClient(monthEntries, tolerance){
+    const map = new Map();
+    for(const m of monthEntries){
+      for(const b of m.brands){
+        const clientName = b.client || b.name;
+        if(!map.has(clientName)) map.set(clientName, {name:clientName, approved:0, actual:0, assignees:new Set(), brands:new Map()});
+        const agg = map.get(clientName);
+        agg.approved += b.approved;
+        agg.actual += b.actual;
+        (b.assignees||[]).forEach(a=>agg.assignees.add(a));
+        if(!agg.brands.has(b.name)) agg.brands.set(b.name, {name:b.name, approved:0, actual:0});
+        const bagg = agg.brands.get(b.name);
+        bagg.approved += b.approved;
+        bagg.actual += b.actual;
+      }
+    }
+    const rows = [...map.values()].map(r=>{
+      const uoSpend = r.approved - r.actual;
+      const usagePct = r.approved > 0 ? (r.actual / r.approved * 100) : (r.actual > 0 ? Infinity : null);
+      const status = classify(usagePct, tolerance);
+      const brands = [...r.brands.values()].sort((a,b)=>a.name.localeCompare(b.name));
+      return {name:r.name, approved:r.approved, actual:r.actual, assignees:[...r.assignees], uoSpend, usagePct, status, brands};
+    });
+    rows.sort((a,b)=>a.name.localeCompare(b.name));
+    return rows;
+  }
+
+  // Client-level rollup for a single week-to-date view of one month.
+  function weekBrandsByClient(monthEntry, week, tolerance){
+    if(!monthEntry) return [];
+    const map = new Map();
+    for(const b of monthEntry.brands){
+      const clientName = b.client || b.name;
+      const cum = b.weeks.slice(0, week).reduce((a,c)=>a+c,0);
+      const target = b.approved * (week/5);
+      if(!map.has(clientName)) map.set(clientName, {name:clientName, approved:0, actual:0, assignees:new Set(), brands:new Map()});
+      const agg = map.get(clientName);
+      agg.approved += target;
+      agg.actual += cum;
+      (b.assignees||[]).forEach(a=>agg.assignees.add(a));
+      if(!agg.brands.has(b.name)) agg.brands.set(b.name, {name:b.name, approved:0, actual:0});
+      const bagg = agg.brands.get(b.name);
+      bagg.approved += target;
+      bagg.actual += cum;
+    }
+    const rows = [...map.values()].map(r=>{
+      const uoSpend = r.approved - r.actual;
+      const usagePct = r.approved > 0 ? (r.actual / r.approved * 100) : (r.actual > 0 ? Infinity : null);
+      const status = classify(usagePct, tolerance);
+      const brands = [...r.brands.values()].sort((a,b)=>a.name.localeCompare(b.name));
+      return {name:r.name, approved:r.approved, actual:r.actual, assignees:[...r.assignees], uoSpend, usagePct, status, brands};
     });
     rows.sort((a,b)=>a.name.localeCompare(b.name));
     return rows;
@@ -836,87 +901,177 @@
     `;
   }
 
-  // ---------- Quarter Compare: standalone comparison, driven by the Year selector ----------
+  // Single quarter card for the all-quarters grid (distinct from renderQuarterCompare's
+  // two-card current-vs-previous pair used on the Report page). Delta shows against whichever
+  // quarter immediately precedes it in the sequence being displayed, if any.
+  function renderQuarterCard(qd, prevStats){
+    function deltaHtml(curVal, prevVal){
+      if(curVal===null||prevVal===null||!isFinite(curVal)||!isFinite(prevVal)) return "";
+      const d = curVal - prevVal;
+      if(Math.abs(d) < 0.5) return `<div class="qdelta">no change vs prev</div>`;
+      return `<div class="qdelta">${d>0?"▲ +":"▼ -"}${fmtMoney(Math.abs(d))} vs prev</div>`;
+    }
+    const s = qd.stats;
+    const list = [
+      {label:"Avg Overspend", val:s.avgOverspend, prevVal:prevStats?prevStats.avgOverspend:null, cls:"over"},
+      {label:"Avg Underspend", val:s.avgUnderspend, prevVal:prevStats?prevStats.avgUnderspend:null, cls:"under"},
+      {label:"Avg On Target", val:s.avgOnTarget, prevVal:prevStats?prevStats.avgOnTarget:null, cls:"target"},
+      {label:"Avg U/O Spend", val:s.avgUOSpend, prevVal:prevStats?prevStats.avgUOSpend:null, cls:"uo"},
+    ];
+    return `<div class="qcard${qd.isLatest?" current":""}">
+      <h3>${qd.label}${qd.isLatest ? ` <span class="pill">latest</span>` : ""}</h3>
+      <div class="qmetric-grid">
+        ${list.map(m=>`
+          <div class="qmetric">
+            <div class="qval ${m.cls}">${fmtMoney(m.val)}</div>
+            <div class="qlbl">${m.label}</div>
+            ${prevStats ? deltaHtml(m.val, m.prevVal) : ""}
+          </div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  // ---------- Quarter Compare: every quarter that has data in the selected year, side by side —
+  // 4 quarters for a completed past year, fewer for the current year (only as many as have been
+  // tracked so far), driven by the Year selector. ----------
   function renderQuarterComparePage(){
     const tolerance = state.tolerance;
     const monthsInYear = state.data.months.filter(m=>m.year===state.year);
-    const lastMonth = monthsInYear.length ? Math.max(...monthsInYear.map(m=>m.month)) : (latestAvailableMonth()||{month:1}).month;
-    const q = quarterOf(lastMonth);
-    const curQMonths = monthsInQuarter(state.year, q).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
-    const pq = prevQuarter(state.year, q);
-    const prevQMonths = monthsInQuarter(pq.year, pq.quarter).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
-    const curStats = statsOf(aggregateBrands(curQMonths, tolerance));
-    const prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
+    const maxMonth = monthsInYear.length ? Math.max(...monthsInYear.map(m=>m.month)) : 0;
+    const maxQuarter = maxMonth ? quarterOf(maxMonth) : 0;
+
+    const quarters = [];
+    for(let q=1; q<=maxQuarter; q++){
+      const qMonths = monthsInQuarter(state.year, q).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
+      if(!qMonths.length) continue;
+      quarters.push({ quarter:q, label:`Q${q} ${state.year}`, stats: statsOf(aggregateBrands(qMonths, tolerance)) });
+    }
+    if(quarters.length) quarters[quarters.length-1].isLatest = (state.year === (latestAvailableMonth()||{}).year);
+
     contentEl.innerHTML = `
       <div class="section-title" style="margin-top:2px">Quarter Compare</div>
       <div class="control-row">
         <span class="field-label">Year</span>
         <span id="qcYearSlot"></span>
-        <span class="period-pill">${state.year} — most recent quarter vs previous</span>
+        <span class="period-pill">${quarters.length} quarter${quarters.length===1?"":"s"} tracked in ${state.year}</span>
       </div>
-      ${renderQuarterCompare(curStats, prevStats, `Q${q} ${state.year}`, `Q${pq.quarter} ${pq.year}`)}
+      ${quarters.length ? `<div class="quarters-grid">
+        ${quarters.map((qd,i)=>renderQuarterCard(qd, i>0 ? quarters[i-1].stats : null)).join("")}
+      </div>` : `<div class="empty">No data available for ${state.year} yet.</div>`}
     `;
     mount(yearWrap, "qcYearSlot");
   }
 
   // ---------- By Client: pick one brand, browse it by year / month / week ----------
-  function allClientNames(){
+  // Per Brand: every individually tracked ClickUp task/brand (e.g. "HygieniX", "Boom Zambia").
+  // Per Client: the umbrella they roll up to via ClickUp's own "Client / Brand" field (e.g. all
+  // of those roll up to client "Trade Kings"; "Access Bank" + its Linkedin/W Community channel
+  // lines all roll up to client "Access Bank").
+  function allBrandNames(){
     if(!state.data) return [];
     const set = new Set();
     state.data.months.forEach(m=>m.brands.forEach(b=>set.add(b.name)));
     return [...set].sort();
   }
+  function allClientGroupNames(){
+    if(!state.data) return [];
+    const set = new Set();
+    state.data.months.forEach(m=>m.brands.forEach(b=>set.add(b.client || b.name)));
+    return [...set].sort();
+  }
+  function currentClientEntityNames(){
+    return state.clientViewMode === "client" ? allClientGroupNames() : allBrandNames();
+  }
+  function currentSelectedEntity(){
+    return state.clientViewMode === "client" ? state.selectedClientGroup : state.selectedClient;
+  }
+  function setSelectedEntity(v){
+    if(state.clientViewMode === "client") state.selectedClientGroup = v; else state.selectedClient = v;
+  }
   function populateClientSelect(){
-    const names = allClientNames();
+    const names = currentClientEntityNames();
     clientSelect.innerHTML = names.map(n=>`<option value="${n}">${n}</option>`).join("");
-    if(!state.selectedClient || !names.includes(state.selectedClient)) state.selectedClient = names[0] || null;
-    if(state.selectedClient) clientSelect.value = state.selectedClient;
+    let sel = currentSelectedEntity();
+    if(!sel || !names.includes(sel)) sel = names[0] || null;
+    setSelectedEntity(sel);
+    if(sel) clientSelect.value = sel;
   }
   function renderClientPage(){
-    const names = allClientNames();
+    populateClientSelect();
+    const names = currentClientEntityNames();
     if(!names.length){ contentEl.innerHTML = `<div class="empty">No brand data available yet.</div>`; return; }
-    if(!state.selectedClient) state.selectedClient = names[0];
-    const client = state.selectedClient;
+    const entity = currentSelectedEntity();
     const tolerance = state.tolerance;
+    const isClientMode = state.clientViewMode === "client";
+    const aggFn = isClientMode ? aggregateByClient : aggregateBrands;
+    const weekFn = isClientMode ? weekBrandsByClient : weekBrands;
 
     let row, label, approvedLabel = "Approved Spend";
     if(state.clientPeriod === "year"){
       const monthsInYear = state.data.months.filter(m=>m.year===state.year);
-      row = aggregateBrands(monthsInYear, tolerance).find(r=>r.name===client);
+      row = aggFn(monthsInYear, tolerance).find(r=>r.name===entity);
       label = `${state.year} — full year`;
     } else if(state.clientPeriod === "month"){
       const m = getMonthEntry(state.year, state.month);
-      row = m ? aggregateBrands([m], tolerance).find(r=>r.name===client) : null;
+      row = m ? aggFn([m], tolerance).find(r=>r.name===entity) : null;
       label = `${MONTH_NAMES[state.month]} ${state.year}`;
     } else {
       const m = getMonthEntry(state.year, state.month);
-      row = weekBrands(m, state.week, tolerance).find(r=>r.name===client);
+      row = weekFn(m, state.week, tolerance).find(r=>r.name===entity);
       label = `${MONTH_NAMES[state.month]} ${state.year} — through Week ${state.week}`;
       approvedLabel = `Prorated Target (Wk ${state.week})`;
     }
     const statusCls = row ? badgeClass(row.status) : "";
     const cardCls = statusCls === "over" ? "c4" : statusCls === "under" ? "c3" : statusCls === "target" ? "c5" : "c1";
 
-    // Full history trend for this one client, across every period on record.
+    // Full history trend for this one entity, across every period on record.
     const history = state.data.months.map(m=>{
-      const r = aggregateBrands([m], tolerance).find(x=>x.name===client);
+      const r = aggFn([m], tolerance).find(x=>x.name===entity);
       return r ? {label:`${MONTH_NAMES[m.month]} ${m.year}`, ...r} : null;
     }).filter(Boolean);
 
     const assigneeNames = (row && row.assignees && row.assignees.length) ? row.assignees.join(", ") : null;
+    const hasBrandBreakdown = isClientMode && row && row.brands && row.brands.length > 0;
+    const brandCountPill = hasBrandBreakdown ? `<span class="pill">${row.brands.length} brand${row.brands.length===1?"":"s"}</span>` : "";
+
+    const brandDrillHtml = (hasBrandBreakdown && state.clientBrandDrillOpen) ? `
+      <div class="drill-panel" style="margin:-6px 0 22px 0;">
+        <div class="drill-head"><span>Brands under ${entity} — ${row.brands.length}</span></div>
+        <table>
+          <thead><tr><th>Brand</th><th class="num-cell">${approvedLabel}</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
+          <tbody>${row.brands.map(b=>{
+            const uo = b.approved - b.actual;
+            const pct = b.approved > 0 ? (b.actual/b.approved*100) : (b.actual>0?Infinity:null);
+            const st = classify(pct, tolerance);
+            return `<tr>
+              <td class="brand-name">${b.name}</td>
+              <td class="num-cell">${fmtMoney(b.approved)}</td>
+              <td class="num-cell">${fmtMoney(b.actual)}</td>
+              <td class="num-cell"><span class="${st==="Overspend"?"text-over":st==="Underspend"?"text-under":"text-target"}">${fmtMoney(uo)}</span></td>
+              <td class="num-cell">${fmtPct(pct)}</td>
+              <td><span class="badge ${badgeClass(st)}">${st}</span></td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table>
+      </div>` : "";
+
     contentEl.innerHTML = `
-      <div class="section-title" style="margin-top:2px">${client}${assigneeNames ? ` <span class="pill">Assigned to: ${assigneeNames}</span>` : ""}</div>
+      <div class="section-title" style="margin-top:2px">${entity} ${brandCountPill}${assigneeNames ? ` <span class="pill">Assigned to: ${assigneeNames}</span>` : ""}</div>
       <div class="control-row" id="clientControlRow">
+        <button class="pill-btn ${!isClientMode?"active":""}" data-clientviewmode="brand">Per Brand</button>
+        <button class="pill-btn ${isClientMode?"active":""}" data-clientviewmode="client">Per Client</button>
         <button class="pill-btn ${state.clientPeriod==="year"?"active":""}" data-clientperiod="year">Full Year</button>
         <span id="ccYearSlot"></span>
         <button class="pill-btn ${state.clientPeriod==="month"?"active":""}" data-clientperiod="month">Single Month</button>
         <span id="ccMonthSlot"></span>
         <button class="pill-btn ${state.clientPeriod==="week"?"active":""}" data-clientperiod="week">Week-to-date</button>
         <span id="ccWeekSlot"></span>
-        <span class="field-label" style="margin-left:8px;">Client</span>
+        <span class="field-label" style="margin-left:8px;">${isClientMode?"Client":"Brand"}</span>
         <span id="ccClientSlot"></span>
         <span class="period-pill">${label}</span>
       </div>
+      ${hasBrandBreakdown ? `<div style="margin:-10px 0 18px 0;"><span class="pill-btn" style="cursor:pointer; display:inline-block;" data-toggle-brand-drill="1">${state.clientBrandDrillOpen ? "Hide" : "Show"} brand breakdown ›</span></div>` : ""}
+      ${brandDrillHtml}
       <div class="stat-grid">
         <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${row ? row.status : "—"}</div><div class="lbl">Status</div></div>
         <div class="stat-card c1"><div class="num">${fmtMoney(row ? row.approved : null)}</div><div class="lbl">${approvedLabel}</div></div>
@@ -924,7 +1079,7 @@
         <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtMoney(row ? row.uoSpend : null)}</div><div class="lbl">U/O Spend $</div></div>
         <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtPct(row ? row.usagePct : null)}</div><div class="lbl">Usage %</div></div>
       </div>
-      <div class="section-title">History <span class="pill">${history.length} periods tracked for ${client}</span></div>
+      <div class="section-title">History <span class="pill">${history.length} periods tracked for ${entity}</span></div>
       <table class="trend-table">
         <thead><tr><th>Period</th><th class="num-cell">Approved</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
         <tbody>${history.map(h=>`<tr>
@@ -1140,7 +1295,7 @@
       render();
     });
     clientSelect.addEventListener("change", ()=>{
-      state.selectedClient = clientSelect.value;
+      setSelectedEntity(clientSelect.value);
       render();
     });
   }
@@ -1179,6 +1334,24 @@
     const subBtn = e.target.closest(".control-row button[data-clientperiod]");
     if(subBtn){
       state.clientPeriod = subBtn.dataset.clientperiod;
+      render();
+      return;
+    }
+
+    const clientViewBtn = e.target.closest(".control-row button[data-clientviewmode]");
+    if(clientViewBtn){
+      const mode = clientViewBtn.dataset.clientviewmode;
+      if(state.clientViewMode !== mode){
+        state.clientViewMode = mode;
+        state.clientBrandDrillOpen = false;
+      }
+      render();
+      return;
+    }
+
+    const brandDrillToggle = e.target.closest("[data-toggle-brand-drill]");
+    if(brandDrillToggle){
+      state.clientBrandDrillOpen = !state.clientBrandDrillOpen;
       render();
       return;
     }
