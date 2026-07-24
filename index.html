@@ -189,9 +189,6 @@
       <option value="5" selected>Week 5 (full month)</option>
     </select>
   </label>
-  <label>On-target tolerance
-    <input id="tolerance" type="number" min="0" max="50" step="1" value="5" style="width:64px" /> %
-  </label>
   <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
 </div>
 
@@ -216,7 +213,6 @@
   const weekSelect = document.getElementById("weekSelect");
   const monthWrap = document.getElementById("monthWrap");
   const weekWrap = document.getElementById("weekWrap");
-  const toleranceInput = document.getElementById("tolerance");
   const refreshBtn = document.getElementById("refreshBtn");
 
   const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -484,11 +480,6 @@
     state.period = btn.dataset.period;
     monthWrap.style.display = (state.period==="month"||state.period==="week") ? "flex" : "none";
     weekWrap.style.display = (state.period==="week") ? "flex" : "none";
-    render();
-  });
-
-  toleranceInput.addEventListener("change", ()=>{
-    state.tolerance = Number(toleranceInput.value) || 0;
     render();
   });
 
