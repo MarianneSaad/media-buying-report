@@ -71,16 +71,13 @@
 
   /* ---------- Controls ---------- */
   .controls{
-    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-    padding:20px 32px 0 32px;
+    display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+    padding:14px 32px 0 32px;
   }
-  .controls select, .controls input{
-    border:1px solid var(--border); border-radius:9px; padding:9px 12px; font-size:13.5px; color:var(--ink);
-    background:#fff; font-weight:600;
+  .page-title-inline{font-size:15px; font-weight:800; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .page-title-inline .pill{
+    font-size:11px; font-weight:700; color:var(--muted); background:var(--card); border-radius:100px; padding:3px 10px;
   }
-  .controls label{font-size:12.5px; color:var(--muted); font-weight:700; display:flex; align-items:center; gap:8px;}
-  .selector-group{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
-  #clientControlsSlot .selector-group{margin:2px 0 24px 0;}
   .refresh-btn{
     margin-left:auto; border:1px solid var(--border); background:#fff; border-radius:9px; padding:9px 16px;
     font-weight:700; font-size:13px; cursor:pointer; color:var(--ink);
@@ -88,7 +85,34 @@
   .refresh-btn:hover{background:var(--card);}
   .updated-at{font-size:11.5px; color:var(--muted);}
 
-  main{padding:20px 32px 48px 32px;}
+  /* Selector pool: holding pen for the shared Year/Month/Week/Client dropdowns when a page
+     doesn't need them — kept out of layout entirely until a page mounts one into its own slot. */
+  #selectorPool{display:none;}
+  #selectorPool select{
+    border:1px solid var(--border); border-radius:9px; padding:7px 10px; font-size:13px; color:var(--ink);
+    background:#fff; font-weight:600;
+  }
+
+  /* One consolidated control line per page: granularity pill immediately followed by its own
+     value dropdown, repeated for Year/Month/Week (or Client), ending with the period-label pill. */
+  .control-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:10px 0 22px 0;}
+  .control-row .pill-btn{
+    border:1px solid var(--border); background:#fff; color:var(--muted); font-weight:700; font-size:12.5px;
+    padding:7px 14px; border-radius:8px; cursor:pointer; white-space:nowrap;
+  }
+  .control-row .pill-btn.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .control-row .pill-btn:hover:not(.active){background:var(--card);}
+  .control-row select{
+    border:1px solid var(--border); border-radius:9px; padding:7px 10px; font-size:13px; color:var(--ink);
+    background:#fff; font-weight:600; margin-right:6px;
+  }
+  .control-row .field-label{font-size:12.5px; color:var(--muted); font-weight:700; margin-right:2px;}
+  .control-row .period-pill{
+    margin-left:auto; font-size:11.5px; font-weight:700; color:var(--muted); background:var(--card);
+    border-radius:100px; padding:6px 14px; white-space:nowrap;
+  }
+
+  main{padding:10px 32px 48px 32px;}
 
   /* ---------- Stat cards ---------- */
   .stat-grid{
@@ -164,6 +188,8 @@
 
   /* ---------- Overview trend table (color-coded + latest-row highlight) ---------- */
   .trend-table td, .trend-table th{padding:9px 12px;}
+  .trend-table th.sortable:hover{color:var(--ink); background:var(--card);}
+  .trend-table th.sortable{user-select:none;}
   .trend-table th .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;}
   .dot.over{background:var(--red);} .dot.under{background:var(--orange);} .dot.target{background:var(--green);}
   .text-over{color:var(--red); font-weight:800;}
@@ -200,16 +226,19 @@
   tr.assignee-row:hover{background:var(--card);}
   tr.assignee-row .pill{font-weight:600; text-transform:none; letter-spacing:0;}
 
-  /* ---------- Quarter compare: colored metrics + deltas ---------- */
-  .qcard{border-left-width:5px; border-left-style:solid; border-left-color:var(--muted);}
+  /* ---------- Quarter compare: big, obvious metrics + deltas ---------- */
+  .qcard{border-left-width:5px; border-left-style:solid; border-left-color:var(--muted); padding:18px 20px;}
   .qcard.current{border-left-color:var(--purple);}
-  .qcard .row{display:flex; justify-content:space-between; align-items:baseline;}
-  .qcard .row .val{display:flex; align-items:baseline; gap:7px;}
-  .qcard .row b.over{color:var(--red);}
-  .qcard .row b.under{color:var(--orange);}
-  .qcard .row b.target{color:var(--green);}
-  .qcard .row b.uo{color:var(--purple);}
-  .qcard .delta{font-size:10.5px; color:var(--muted); font-weight:700; white-space:nowrap;}
+  .qcard h3{margin:0 0 14px 0;}
+  .qmetric-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px 16px;}
+  .qmetric{padding:6px 0;}
+  .qval{font-size:26px; font-weight:800; line-height:1.1;}
+  .qval.over{color:var(--red);}
+  .qval.under{color:var(--orange);}
+  .qval.target{color:var(--green);}
+  .qval.uo{color:var(--purple);}
+  .qlbl{font-size:11.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.3px; margin-top:4px;}
+  .qdelta{font-size:12px; color:var(--muted); font-weight:700; white-space:nowrap; margin-top:6px;}
 
   /* ---------- Footer ---------- */
   footer.site{
@@ -247,31 +276,28 @@
 </header>
 
 <div class="controls" id="controlsBar">
-  <div class="selector-group" id="selectorGroup">
-    <label id="clientWrap" style="display:none">Client
-      <select id="clientSelect"></select>
-    </label>
-    <label id="yearWrap">Year
-      <select id="yearSelect"></select>
-    </label>
-    <label id="monthWrap" style="display:none">Month
-      <select id="monthSelect"></select>
-    </label>
-    <label id="weekWrap" style="display:none">Week
-      <select id="weekSelect">
-        <option value="1">Week 1</option>
-        <option value="2">Week 2</option>
-        <option value="3">Week 3</option>
-        <option value="4">Week 4</option>
-        <option value="5" selected>Week 5 (full month)</option>
-      </select>
-    </label>
-  </div>
+  <div class="page-title-inline">Media Buying — Spend Pacing Report <span class="pill">Approved budget vs. actual spend across all brands</span></div>
   <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
 </div>
 
+<!-- Holding pen for the shared selectors: hidden by default (display:none), each page moves the
+     ones it needs into a slot inside its own single control-row. -->
+<div id="selectorPool">
+  <span id="clientWrap"><select id="clientSelect"></select></span>
+  <span id="yearWrap"><select id="yearSelect"></select></span>
+  <span id="monthWrap"><select id="monthSelect"></select></span>
+  <span id="weekWrap">
+    <select id="weekSelect">
+      <option value="1">Week 1</option>
+      <option value="2">Week 2</option>
+      <option value="3">Week 3</option>
+      <option value="4">Week 4</option>
+      <option value="5" selected>Week 5 (full month)</option>
+    </select>
+  </span>
+</div>
+
 <main>
-  <div class="section-title" style="margin-top:4px">Media Buying — Spend Pacing Report <span class="pill">Approved budget vs. actual spend across all brands</span></div>
   <div id="content" class="loading">Loading live data from ClickUp…</div>
 </main>
 
@@ -285,11 +311,11 @@
 (function(){
   const state = { tab: "report", reportGranularity: "year", data: null, year: null, month: null, week: 5, tolerance: 5,
     clientPeriod: "year", selectedClient: null, drillStatus: null, lastRows: [],
-    assigneePeriod: null, drillAssignee: null };
+    assigneePeriod: null, drillAssignee: null, assigneeGranularity: "month", assigneeWeek: 5,
+    overviewSort: { key: "period", dir: "desc" } };
 
   const contentEl = document.getElementById("content");
-  const controlsBar = document.getElementById("controlsBar");
-  const selectorGroup = document.getElementById("selectorGroup");
+  const selectorPool = document.getElementById("selectorPool");
   const yearSelect = document.getElementById("yearSelect");
   const monthSelect = document.getElementById("monthSelect");
   const weekSelect = document.getElementById("weekSelect");
@@ -300,20 +326,20 @@
   const clientWrap = document.getElementById("clientWrap");
   const refreshBtn = document.getElementById("refreshBtn");
 
-  // The Year/Month/Week/Client selectors are one shared DOM node group (selectorGroup) that gets
-  // physically relocated: normally it lives in the top controls bar, but on the "By Client" page
-  // it moves inside the page content itself (next to the client's own Year/Month/Week toggle) so
-  // the same controls aren't shown in two places on screen at once.
-  function dockSelectorGroupToTopBar(){
-    controlsBar.insertBefore(selectorGroup, refreshBtn);
+  // The Year/Month/Week/Client selectors are shared DOM nodes physically relocated into whichever
+  // page needs them. Parking them all back in the hidden pool first (before any innerHTML wipe)
+  // is what lets each page mount only the ones it needs into its own single control-row.
+  function parkAllSelectors(){
+    selectorPool.appendChild(clientWrap);
+    selectorPool.appendChild(yearWrap);
+    selectorPool.appendChild(monthWrap);
+    selectorPool.appendChild(weekWrap);
   }
-  // Pages that need no Year/Month/Week/Client controls at all (Snapshot, Overview) hide every
-  // selector so the top bar shows nothing but the Refresh button.
-  function hideAllSelectors(){
-    clientWrap.style.display = "none";
-    yearWrap.style.display = "none";
-    monthWrap.style.display = "none";
-    weekWrap.style.display = "none";
+  function mount(wrap, slotId, display){
+    const slot = document.getElementById(slotId);
+    if(!slot) return;
+    wrap.style.display = display || "inline-flex";
+    slot.appendChild(wrap);
   }
 
   const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -504,25 +530,27 @@
     function deltaHtml(curVal, prevVal){
       if(curVal===null||prevVal===null||!isFinite(curVal)||!isFinite(prevVal)) return "";
       const d = curVal - prevVal;
-      if(Math.abs(d) < 0.5) return `<span class="delta">no change</span>`;
-      return `<span class="delta">${d>0?"▲ +":"▼ -"}${fmtMoney(Math.abs(d)).replace("$","$")} vs prev</span>`;
+      if(Math.abs(d) < 0.5) return `<div class="qdelta">no change vs prev</div>`;
+      return `<div class="qdelta">${d>0?"▲ +":"▼ -"}${fmtMoney(Math.abs(d))} vs prev</div>`;
     }
-    function rows(s, isCurrent){
-      const metrics = [
+    function metrics(s, isCurrent){
+      const list = [
         {label:"Avg Overspend", val:s.avgOverspend, prevVal:prevStats.avgOverspend, cls:"over"},
         {label:"Avg Underspend", val:s.avgUnderspend, prevVal:prevStats.avgUnderspend, cls:"under"},
         {label:"Avg On Target", val:s.avgOnTarget, prevVal:prevStats.avgOnTarget, cls:"target"},
         {label:"Avg U/O Spend", val:s.avgUOSpend, prevVal:prevStats.avgUOSpend, cls:"uo"},
       ];
-      return metrics.map(m=>`
-        <div class="row"><span>${m.label}</span>
-          <span class="val"><b class="${m.cls}">${fmtMoney(m.val)}</b>${isCurrent ? deltaHtml(m.val, m.prevVal) : ""}</span>
-        </div>`).join("");
+      return `<div class="qmetric-grid">${list.map(m=>`
+        <div class="qmetric">
+          <div class="qval ${m.cls}">${fmtMoney(m.val)}</div>
+          <div class="qlbl">${m.label}</div>
+          ${isCurrent ? deltaHtml(m.val, m.prevVal) : ""}
+        </div>`).join("")}</div>`;
     }
     return `<div class="section-title">Quarter comparison <span class="pill">${prevLabel} vs ${curLabel}</span></div>
       <div class="quarter-compare">
-        <div class="qcard"><h3>${prevLabel} (Previous Quarter Avgs)</h3>${rows(prevStats,false)}</div>
-        <div class="qcard current"><h3>${curLabel} (Current Quarter)</h3>${rows(currentStats,true)}</div>
+        <div class="qcard"><h3>${prevLabel} (Previous Quarter Avgs)</h3>${metrics(prevStats,false)}</div>
+        <div class="qcard current"><h3>${curLabel} (Current Quarter)</h3>${metrics(currentStats,true)}</div>
       </div>`;
   }
 
@@ -565,9 +593,9 @@
   }
 
   function render(){
-    // Always re-dock the shared selectors to the top bar first — safe even if they're already
-    // there, and required before wiping innerHTML on a page that had them moved into its content.
-    dockSelectorGroupToTopBar();
+    // Always park the shared selectors back in the hidden pool first — safe even if they're
+    // already there, and required before wiping innerHTML on a page that had them mounted in it.
+    parkAllSelectors();
     if(!state.data){ contentEl.innerHTML = `<div class="loading">Loading live data from ClickUp…</div>`; return; }
 
     if(state.tab === "snapshot") return renderSnapshotPage();
@@ -631,25 +659,25 @@
     state.lastRows = rows;
     const showAssignee = g==="year" ? state.year>=2026 : isAssigneeEligible(state.year, state.month);
     contentEl.innerHTML = `
-      <div class="section-title">${statLabel} <span class="pill">${rows.length} brands tracked</span></div>
-      <div class="subnav" id="reportSubnav">
-        <button data-reportperiod="year" class="${g==="year"?"active":""}">Year</button>
-        <button data-reportperiod="month" class="${g==="month"?"active":""}">Month</button>
-        <button data-reportperiod="week" class="${g==="week"?"active":""}">Week</button>
+      <div class="section-title" style="margin-top:2px">Report</div>
+      <div class="control-row">
+        <button class="pill-btn ${g==="year"?"active":""}" data-reportperiod="year">Year</button>
+        <span id="rpYearSlot"></span>
+        <button class="pill-btn ${g==="month"?"active":""}" data-reportperiod="month">Month</button>
+        ${(g==="month"||g==="week") ? `<span id="rpMonthSlot"></span>` : ""}
+        <button class="pill-btn ${g==="week"?"active":""}" data-reportperiod="week">Week</button>
+        ${g==="week" ? `<span id="rpWeekSlot"></span>` : ""}
+        <span class="period-pill">${statLabel} · ${rows.length} brands tracked</span>
       </div>
-      <div id="reportControlsSlot"></div>
       ${renderStatCards(curStats, cumAvg)}
       ${renderQuarterCompare(curStats, prevStats, curQuarterLabel, prevLabel)}
       <div class="section-title">Brand detail</div>
       ${renderTable(rows, approvedLabel, {showAssignee})}
     `;
-    // The Year/Month/Week value selectors live only here, right under the granularity toggle —
-    // not duplicated at the top of the page.
-    document.getElementById("reportControlsSlot").appendChild(selectorGroup);
-    clientWrap.style.display = "none";
-    yearWrap.style.display = "flex";
-    monthWrap.style.display = (g==="month"||g==="week") ? "flex" : "none";
-    weekWrap.style.display = (g==="week") ? "flex" : "none";
+    // The Year/Month/Week value selectors live only here, paired inline with their own pill.
+    mount(yearWrap, "rpYearSlot");
+    if(g==="month"||g==="week") mount(monthWrap, "rpMonthSlot");
+    if(g==="week") mount(weekWrap, "rpWeekSlot");
   }
 
   // ---------- Snapshot: a genuinely different, at-a-glance concise summary ----------
@@ -660,7 +688,6 @@
     return state.data.months[state.data.months.length-1];
   }
   function renderSnapshotPage(){
-    hideAllSelectors();
     const m = latestAvailableMonth();
     if(!m){ contentEl.innerHTML = `<div class="empty">No data available yet.</div>`; return; }
     const tolerance = state.tolerance;
@@ -701,37 +728,85 @@
     `;
   }
 
-  // ---------- Overview: all-time trend across every period, one row per month, color-coded ----------
+  // ---------- Overview: all-time trend across every period, one row per month, color-coded,
+  // sortable by any column (defaults to descending whenever you switch columns), with a
+  // snapshot bar up top showing the latest period at a glance. ----------
+  const OVERVIEW_COLUMNS = {
+    period:   { label:"Period",     get:p=>p.year*100+p.month },
+    brands:   { label:"Brands",     get:p=>p.brandCount },
+    over:     { label:"Overspend",  get:p=>p.overCount },
+    under:    { label:"Underspend", get:p=>p.underCount },
+    target:   { label:"On Target",  get:p=>p.targetCount },
+    avguo:    { label:"Avg U/O Spend", get:p=>(p.avgUOSpend===null?-Infinity:p.avgUOSpend) },
+  };
   function renderOverviewPage(){
-    hideAllSelectors();
     const tolerance = state.tolerance;
+    const latest = latestAvailableMonth();
     const perMonth = state.data.months.map(m=>{
       const rows = aggregateBrands([m], tolerance);
       const s = statsOf(rows);
-      return {label:`${MONTH_NAMES[m.month]} ${m.year}`, ...s, brandCount: rows.length};
+      return {
+        year:m.year, month:m.month, label:`${MONTH_NAMES[m.month]} ${m.year}`, ...s,
+        brandCount: rows.length,
+        isLatest: latest && m.year===latest.year && m.month===latest.month,
+      };
     });
+
+    const sort = state.overviewSort;
+    const col = OVERVIEW_COLUMNS[sort.key] || OVERVIEW_COLUMNS.period;
+    const sorted = [...perMonth].sort((a,b)=>{
+      const av = col.get(a), bv = col.get(b);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sort.dir === "desc" ? -cmp : cmp;
+    });
+
+    // Snapshot bar: the latest period's overall mix, at a glance, before the full trend table.
+    let snapshotBarHtml = "";
+    if(latest){
+      const latestRows = aggregateBrands([latest], tolerance);
+      const ls = statsOf(latestRows);
+      const total = latestRows.length || 1;
+      snapshotBarHtml = `
+        <div class="health-bar">
+          ${ls.overCount ? `<div class="seg over" style="width:${ls.overCount/total*100}%"></div>` : ""}
+          ${ls.underCount ? `<div class="seg under" style="width:${ls.underCount/total*100}%"></div>` : ""}
+          ${ls.targetCount ? `<div class="seg target" style="width:${ls.targetCount/total*100}%"></div>` : ""}
+        </div>
+        <div class="health-legend">
+          <span><i class="dot over"></i>${ls.overCount} Overspend</span>
+          <span><i class="dot under"></i>${ls.underCount} Underspend</span>
+          <span><i class="dot target"></i>${ls.targetCount} On Target</span>
+          <span style="color:var(--muted); font-weight:600;">${MONTH_NAMES[latest.month]} ${latest.year} snapshot · ${latestRows.length} brands</span>
+        </div>`;
+    }
+
+    function th(key, extraClass){
+      const active = sort.key === key;
+      const arrow = active ? (sort.dir==="desc" ? " ▼" : " ▲") : "";
+      return `<th class="${extraClass||""} sortable" data-sortkey="${key}" style="cursor:pointer">${OVERVIEW_COLUMNS[key].label}${arrow}</th>`;
+    }
+
     contentEl.innerHTML = `
-      <div class="section-title">All-time overview <span class="pill">${perMonth.length} periods · ${PERIODS.length} months tracked total</span></div>
-      <table class="trend-table">
+      <div class="section-title" style="margin-top:2px">All-time overview <span class="pill">${perMonth.length} periods · ${PERIODS.length} months tracked total</span></div>
+      ${snapshotBarHtml}
+      <table class="trend-table" id="overviewTable">
         <thead><tr>
-          <th>Period</th><th class="num-cell">Brands</th>
-          <th class="num-cell"><i class="dot over"></i>Overspend</th>
-          <th class="num-cell"><i class="dot under"></i>Underspend</th>
-          <th class="num-cell"><i class="dot target"></i>On Target</th>
-          <th class="num-cell">Avg U/O Spend</th>
+          ${th("period")}
+          ${th("brands","num-cell")}
+          <th class="num-cell sortable" data-sortkey="over" style="cursor:pointer"><i class="dot over"></i>${OVERVIEW_COLUMNS.over.label}${sort.key==="over"?(sort.dir==="desc"?" ▼":" ▲"):""}</th>
+          <th class="num-cell sortable" data-sortkey="under" style="cursor:pointer"><i class="dot under"></i>${OVERVIEW_COLUMNS.under.label}${sort.key==="under"?(sort.dir==="desc"?" ▼":" ▲"):""}</th>
+          <th class="num-cell sortable" data-sortkey="target" style="cursor:pointer"><i class="dot target"></i>${OVERVIEW_COLUMNS.target.label}${sort.key==="target"?(sort.dir==="desc"?" ▼":" ▲"):""}</th>
+          ${th("avguo","num-cell")}
         </tr></thead>
         <tbody>
-          ${perMonth.map((p,idx)=>{
-            const isLatest = idx === perMonth.length-1;
-            return `<tr class="${isLatest?"row-latest":""}">
-            <td class="brand-name">${p.label}${isLatest?`<span class="latest-pill">Latest</span>`:""}</td>
+          ${sorted.map(p=>`<tr class="${p.isLatest?"row-latest":""}">
+            <td class="brand-name">${p.label}${p.isLatest?`<span class="latest-pill">Latest</span>`:""}</td>
             <td class="num-cell">${p.brandCount}</td>
             <td class="num-cell"><span class="${p.overCount>0?"text-over":"text-zero"}">${p.overCount}</span></td>
             <td class="num-cell"><span class="${p.underCount>0?"text-under":"text-zero"}">${p.underCount}</span></td>
             <td class="num-cell"><span class="${p.targetCount>0?"text-target":"text-zero"}">${p.targetCount}</span></td>
             <td class="num-cell"><span class="${p.avgUOSpend===null?"":(p.avgUOSpend>=0?"text-target":"text-over")}">${fmtMoney(p.avgUOSpend)}</span></td>
-          </tr>`;
-          }).join("")}
+          </tr>`).join("")}
         </tbody>
       </table>
     `;
@@ -749,15 +824,15 @@
     const curStats = statsOf(aggregateBrands(curQMonths, tolerance));
     const prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
     contentEl.innerHTML = `
-      <div class="section-title">Quarter Compare <span class="pill">${state.year} — most recent quarter vs previous</span></div>
-      <div id="qcompareControlsSlot"></div>
+      <div class="section-title" style="margin-top:2px">Quarter Compare</div>
+      <div class="control-row">
+        <span class="field-label">Year</span>
+        <span id="qcYearSlot"></span>
+        <span class="period-pill">${state.year} — most recent quarter vs previous</span>
+      </div>
       ${renderQuarterCompare(curStats, prevStats, `Q${q} ${state.year}`, `Q${pq.quarter} ${pq.year}`)}
     `;
-    document.getElementById("qcompareControlsSlot").appendChild(selectorGroup);
-    clientWrap.style.display = "none";
-    yearWrap.style.display = "flex";
-    monthWrap.style.display = "none";
-    weekWrap.style.display = "none";
+    mount(yearWrap, "qcYearSlot");
   }
 
   // ---------- By Client: pick one brand, browse it by year / month / week ----------
@@ -805,13 +880,18 @@
     }).filter(Boolean);
 
     contentEl.innerHTML = `
-      <div class="section-title">${client} <span class="pill">${label}</span></div>
-      <div class="subnav" id="clientSubnav">
-        <button data-clientperiod="year" class="${state.clientPeriod==="year"?"active":""}">Full Year</button>
-        <button data-clientperiod="month" class="${state.clientPeriod==="month"?"active":""}">Single Month</button>
-        <button data-clientperiod="week" class="${state.clientPeriod==="week"?"active":""}">Week-to-date</button>
+      <div class="section-title" style="margin-top:2px">${client}</div>
+      <div class="control-row" id="clientControlRow">
+        <button class="pill-btn ${state.clientPeriod==="year"?"active":""}" data-clientperiod="year">Full Year</button>
+        <span id="ccYearSlot"></span>
+        <button class="pill-btn ${state.clientPeriod==="month"?"active":""}" data-clientperiod="month">Single Month</button>
+        ${(state.clientPeriod==="month"||state.clientPeriod==="week") ? `<span id="ccMonthSlot"></span>` : ""}
+        <button class="pill-btn ${state.clientPeriod==="week"?"active":""}" data-clientperiod="week">Week-to-date</button>
+        ${state.clientPeriod==="week" ? `<span id="ccWeekSlot"></span>` : ""}
+        <span class="field-label" style="margin-left:8px;">Client</span>
+        <span id="ccClientSlot"></span>
+        <span class="period-pill">${label}</span>
       </div>
-      <div id="clientControlsSlot"></div>
       <div class="stat-grid">
         <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${row ? row.status : "—"}</div><div class="lbl">Status</div></div>
         <div class="stat-card c1"><div class="num">${fmtMoney(row ? row.approved : null)}</div><div class="lbl">${approvedLabel}</div></div>
@@ -832,13 +912,11 @@
         </tr>`).join("")}</tbody>
       </table>
     `;
-    // Move the shared Year/Month/Week/Client selectors into this page, right under the
-    // Full Year / Single Month / Week-to-date toggle — nowhere else on screen shows them.
-    document.getElementById("clientControlsSlot").appendChild(selectorGroup);
-    clientWrap.style.display = "flex";
-    yearWrap.style.display = "flex";
-    monthWrap.style.display = (state.clientPeriod==="month"||state.clientPeriod==="week") ? "flex" : "none";
-    weekWrap.style.display = (state.clientPeriod==="week") ? "flex" : "none";
+    // Each selector sits paired directly next to its own pill on this one control row.
+    mount(yearWrap, "ccYearSlot");
+    if(state.clientPeriod==="month"||state.clientPeriod==="week") mount(monthWrap, "ccMonthSlot");
+    if(state.clientPeriod==="week") mount(weekWrap, "ccWeekSlot");
+    mount(clientWrap, "ccClientSlot");
   }
 
   // ---------- By Assignee: who's responsible for how many clients, and their status mix.
@@ -849,7 +927,6 @@
     return state.data.months.filter(m=>isAssigneeEligible(m.year, m.month));
   }
   function renderAssigneePage(){
-    hideAllSelectors();
     const eligible = eligibleAssigneeMonths();
     if(!eligible.length){
       contentEl.innerHTML = `<div class="empty">Assignee tracking starts with the July 2026 tracker — no eligible periods yet.</div>`;
@@ -862,7 +939,12 @@
     const [ay, am] = state.assigneePeriod.split("-").map(Number);
     const monthEntry = getMonthEntry(ay, am);
     const tolerance = state.tolerance;
-    const rows = monthEntry ? aggregateBrands([monthEntry], tolerance) : [];
+    const granularity = state.assigneeGranularity || "month";
+    const week = state.assigneeWeek || 5;
+    const rows = !monthEntry ? [] : (granularity==="week" ? weekBrands(monthEntry, week, tolerance) : aggregateBrands([monthEntry], tolerance));
+    const periodLabel = granularity==="week" ? `${MONTH_NAMES[am]} ${ay} — through Week ${week}` : `${MONTH_NAMES[am]} ${ay}`;
+    const cumAvg = granularity==="week" ? null : cumulativeAvgUOSpend(ay, am);
+    const overallStats = statsOf(rows);
 
     // Group brands by assignee (a brand with several assignees counts under each of them).
     const byAssignee = new Map();
@@ -880,14 +962,24 @@
 
     state.lastRows = rows;
     contentEl.innerHTML = `
-      <div class="section-title">By Assignee <span class="pill">${MONTH_NAMES[am]} ${ay}</span></div>
-      <div class="assignee-month-picker">
-        <label>Month
-          <select id="assigneeMonthSelect">
-            ${eligible.map(m=>`<option value="${m.year}-${m.month}" ${(`${m.year}-${m.month}`===state.assigneePeriod)?"selected":""}>${MONTH_NAMES[m.month]} ${m.year}</option>`).join("")}
-          </select>
-        </label>
+      <div class="section-title" style="margin-top:2px">By Assignee</div>
+      <div class="control-row">
+        <button class="pill-btn ${granularity==="month"?"active":""}" data-assigneeperiod="month">Month</button>
+        <select id="assigneeMonthSelect">
+          ${eligible.map(m=>`<option value="${m.year}-${m.month}" ${(`${m.year}-${m.month}`===state.assigneePeriod)?"selected":""}>${MONTH_NAMES[m.month]} ${m.year}</option>`).join("")}
+        </select>
+        <button class="pill-btn ${granularity==="week"?"active":""}" data-assigneeperiod="week">Week</button>
+        ${granularity==="week" ? `<select id="assigneeWeekSelect">
+            <option value="1" ${week===1?"selected":""}>Week 1</option>
+            <option value="2" ${week===2?"selected":""}>Week 2</option>
+            <option value="3" ${week===3?"selected":""}>Week 3</option>
+            <option value="4" ${week===4?"selected":""}>Week 4</option>
+            <option value="5" ${week===5?"selected":""}>Week 5 (full month)</option>
+          </select>` : ""}
+        <span class="period-pill">${periodLabel}</span>
       </div>
+      ${renderStatCards(overallStats, cumAvg)}
+      <div class="section-title">Assignee breakdown</div>
       <table class="trend-table" id="assigneeSummaryTable">
         <thead><tr>
           <th>Assignee</th><th class="num-cell"># Clients</th>
@@ -911,6 +1003,13 @@
       state.drillAssignee = null;
       render();
     });
+    const weekSel = document.getElementById("assigneeWeekSelect");
+    if(weekSel){
+      weekSel.addEventListener("change", (e)=>{
+        state.assigneeWeek = Number(e.target.value);
+        render();
+      });
+    }
   }
   function renderAssigneeDrill(a){
     return `<div class="drill-panel" style="margin:8px 0;">
@@ -1007,6 +1106,26 @@
     if(assigneeRow){
       const name = assigneeRow.dataset.assignee;
       state.drillAssignee = (state.drillAssignee === name) ? null : name;
+      render();
+      return;
+    }
+
+    const assigneeSubBtn = e.target.closest("#assigneeSubnav button[data-assigneeperiod]");
+    if(assigneeSubBtn){
+      state.assigneeGranularity = assigneeSubBtn.dataset.assigneeperiod;
+      state.drillAssignee = null;
+      render();
+      return;
+    }
+
+    const sortTh = e.target.closest("#overviewTable th[data-sortkey]");
+    if(sortTh){
+      const key = sortTh.dataset.sortkey;
+      if(state.overviewSort.key === key){
+        state.overviewSort.dir = state.overviewSort.dir === "desc" ? "asc" : "desc";
+      } else {
+        state.overviewSort = { key, dir: "desc" };
+      }
       render();
       return;
     }
