@@ -113,10 +113,11 @@ export default async function handler(req, res) {
           const weeks = WEEK_FIELDS.map((fid) => numField(cf, fid) || 0);
           const actual = weeks.reduce((a, b) => a + b, 0);
           const name = normalizeName(rawName);
+          const assignees = (t.assignees || []).map((a) => a.username).filter(Boolean);
           const updatedAt = Number(t.date_updated) || 0;
           const existing = brandMap.get(name);
           if (!existing || updatedAt >= existing.updatedAt) {
-            brandMap.set(name, { updatedAt, entry: { name, approved, weeks, actual } });
+            brandMap.set(name, { updatedAt, entry: { name, approved, weeks, actual, assignees } });
           }
         }
         const brands = [...brandMap.values()].map((v) => v.entry);
