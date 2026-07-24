@@ -98,7 +98,11 @@ export default async function handler(req, res) {
     const months = await Promise.all(
       LISTS.map(async ({ id, year, month }) => {
         const tasks = await fetchList(id, token);
-        const brands = [];
+        // Dedupe by normalized brand name WITHIN this one month's list. Occasionally the same
+        // brand ends up with two tasks in a single tracker (e.g. an accidental copy) — if we
+        // summed both we'd double-count that brand's spend for the month. Keep only the most
+        // recently updated task for a given name instead of summing duplicates.
+        const brandMap = new Map();
         for (const t of tasks) {
           const rawName = t.name || "";
           const key = rawName.trim().toLowerCase();
@@ -108,13 +112,14 @@ export default async function handler(req, res) {
           if (approved === null) continue; // no budget tracked on this task, skip
           const weeks = WEEK_FIELDS.map((fid) => numField(cf, fid) || 0);
           const actual = weeks.reduce((a, b) => a + b, 0);
-          brands.push({
-            name: normalizeName(rawName),
-            approved,
-            weeks,
-            actual,
-          });
+          const name = normalizeName(rawName);
+          const updatedAt = Number(t.date_updated) || 0;
+          const existing = brandMap.get(name);
+          if (!existing || updatedAt >= existing.updatedAt) {
+            brandMap.set(name, { updatedAt, entry: { name, approved, weeks, actual } });
+          }
         }
+        const brands = [...brandMap.values()].map((v) => v.entry);
         return {
           period: `${year}-${String(month).padStart(2, "0")}`,
           year,
