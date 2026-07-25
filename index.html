@@ -1317,7 +1317,20 @@
       label = `${MONTH_NAMES[state.month]} ${state.year} — through Week ${state.week}`;
       approvedLabel = `Prorated Target (Wk ${state.week})`;
     }
-    const statusCls = row ? badgeClass(row.status) : "";
+    // When a single brand is picked from the filter, the top snapshot should reflect that one
+    // brand's own numbers, not the whole client's aggregate.
+    let displayRow = row;
+    if(state.clientBrandFilter && row && row.brands){
+      const fb = row.brands.find(x=>x.name===state.clientBrandFilter);
+      if(fb){
+        const uo = fb.approved - fb.actual;
+        const pct = fb.approved > 0 ? (fb.actual/fb.approved*100) : (fb.actual>0?Infinity:null);
+        const st = classify(pct, tolerance);
+        displayRow = {...row, name:fb.name, approved:fb.approved, actual:fb.actual, uoSpend:uo, usagePct:pct, status:st};
+      }
+    }
+
+    const statusCls = displayRow ? badgeClass(displayRow.status) : "";
     const cardCls = statusCls === "over" ? "c4" : statusCls === "under" ? "c3" : statusCls === "target" ? "c5" : "c1";
 
     // Full history trend for this one client, across every period on record.
@@ -1362,7 +1375,7 @@
     }
 
     contentEl.innerHTML = `
-      <div class="section-title" style="margin-top:2px">${entity}${hasBrands ? ` <span class="pill">${row.brands.length} brands</span>` : ""}${assigneeNames ? ` <span class="pill">Assigned to: ${assigneeNames}</span>` : ""}</div>
+      <div class="section-title" style="margin-top:2px">${state.clientBrandFilter ? state.clientBrandFilter : entity}${hasBrands ? ` <span class="pill">${state.clientBrandFilter ? `1 of ${row.brands.length} brands` : `${row.brands.length} brands`}</span>` : ""}${assigneeNames ? ` <span class="pill">Assigned to: ${assigneeNames}</span>` : ""}</div>
       <div class="control-row" id="clientControlRow">
         <span class="field-label ${state.clientPeriod==="year"?"active":""}">Year</span>
         <span id="ccYearSlot"></span>
@@ -1381,11 +1394,11 @@
         <span class="period-pill">${label}</span>
       </div>
       <div class="stat-grid">
-        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${row ? row.status : "—"}</div><div class="lbl">Status</div></div>
-        <div class="stat-card c1"><div class="num">${fmtMoney(row ? row.approved : null)}</div><div class="lbl">${approvedLabel}</div></div>
-        <div class="stat-card c2"><div class="num">${fmtMoney(row ? row.actual : null)}</div><div class="lbl">Actual Spend</div></div>
-        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtMoney(row ? row.uoSpend : null)}</div><div class="lbl">U/O Spend $</div></div>
-        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtPct(row ? row.usagePct : null)}</div><div class="lbl">Usage %</div></div>
+        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${displayRow ? displayRow.status : "—"}</div><div class="lbl">Status</div></div>
+        <div class="stat-card c1"><div class="num">${fmtMoney(displayRow ? displayRow.approved : null)}</div><div class="lbl">${approvedLabel}</div></div>
+        <div class="stat-card c2"><div class="num">${fmtMoney(displayRow ? displayRow.actual : null)}</div><div class="lbl">Actual Spend</div></div>
+        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtMoney(displayRow ? displayRow.uoSpend : null)}</div><div class="lbl">U/O Spend $</div></div>
+        <div class="stat-card ${cardCls}"><div class="num ${statusCls}">${fmtPct(displayRow ? displayRow.usagePct : null)}</div><div class="lbl">Usage %</div></div>
       </div>
       ${brandsSectionHtml}
       <div class="section-title" style="margin-top:26px;">History <span class="pill">${history.length} periods tracked for ${entity}</span></div>
