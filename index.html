@@ -361,7 +361,8 @@
     drillStatus: null, lastRows: [],
     assigneePeriod: null, drillAssignee: null, assigneeGranularity: "month", assigneeWeek: 5,
     overviewSort: { key: "period", dir: "desc" }, expandedClientGroups: new Set(), overviewDrill: null,
-    assigneeGroupBy: "assignee", drillClient: null, overviewRange: "all", snapshotDrillBrand: null };
+    assigneeGroupBy: "assignee", drillClient: null, overviewRange: "all", snapshotDrillBrand: null,
+    qcScope: "all", qcEntity: null };
 
   const contentEl = document.getElementById("content");
   const selectorPool = document.getElementById("selectorPool");
@@ -720,7 +721,7 @@
     const sf = sheetFields(g);
     return `<tr class="client-group-row" data-toggle-client="${g.client}">
       <td class="brand-name"><span class="client-toggle-arrow">${isOpen?"▾":"▸"}</span>${g.client} <span class="client-brand-count">${g.brands.length} brands</span></td>
-      ${showAssignee ? `<td>${(g.assignees && g.assignees.length) ? g.assignees.join(", ") : "—"}</td>` : ""}
+      ${showAssignee ? `<td>${(g.assignees && g.assignees.length) ? g.assignees.map(firstName).join(", ") : "—"}</td>` : ""}
       <td class="num-cell">${fmtMoney(g.approved)}</td>
       <td class="num-cell">${fmtMoney(sf.cumSpend)}</td>
       <td class="num-cell">${fmtMoney(sf.uoSpend)}</td>
@@ -1125,20 +1126,91 @@
     </div>`;
   }
 
+  // Every distinct brand name on record (regardless of which client it rolls up to) — used to
+  // populate the Quarter Compare page's "By Brand" scope picker.
+  function allBrandNames(){
+    if(!state.data) return [];
+    const set = new Set();
+    state.data.months.forEach(m=>m.brands.forEach(b=>set.add(b.name)));
+    return [...set].sort();
+  }
+
+  // One brand's own approved/actual/uoSpend/usagePct/status, summed across a quarter's months —
+  // used by the Quarter Compare page's "By Brand" scope (as opposed to aggregateBrands, which
+  // pools every brand together).
+  function brandQuarterRow(qMonths, brandName, tolerance){
+    let approved = 0, actual = 0, found = false;
+    qMonths.forEach(m=>{
+      const b = m.brands.find(x=>x.name===brandName);
+      if(b){ approved += b.approved; actual += b.actual; found = true; }
+    });
+    const uoSpend = approved - actual;
+    const usagePct = approved > 0 ? (actual/approved*100) : (actual>0?Infinity:null);
+    const status = found ? classify(usagePct, tolerance) : "n/a";
+    return { approved, actual, uoSpend, usagePct, status };
+  }
+
+  // A single client/brand's own quarter card — shows its actual Approved/Actual/U-O/Usage% figures
+  // (as opposed to renderQuarterCard's cross-brand Avg Overspend/Underspend/On Target/U-O metrics,
+  // which only make sense when averaging across a set of many brands at once).
+  function renderQuarterEntityCard(qd, prevRow){
+    function deltaHtml(curVal, prevVal, fmt){
+      if(curVal===null||prevVal===null||!isFinite(curVal)||!isFinite(prevVal)) return "";
+      const d = curVal - prevVal;
+      if(Math.abs(d) < 0.5) return `<div class="qdelta">no change vs prev</div>`;
+      return `<div class="qdelta">${d>0?"▲ +":"▼ -"}${fmt(Math.abs(d))} vs prev</div>`;
+    }
+    const r = qd.row;
+    const statusCls = r.status==="Overspend"?"over":r.status==="Underspend"?"under":r.status==="On Target"?"target":"uo";
+    const list = [
+      {label:"Approved", val:r.approved, prevVal:prevRow?prevRow.approved:null, cls:"uo", fmt:fmtMoney},
+      {label:"Actual", val:r.actual, prevVal:prevRow?prevRow.actual:null, cls:"uo", fmt:fmtMoney},
+      {label:"U/O Spend $", val:r.uoSpend, prevVal:prevRow?prevRow.uoSpend:null, cls:statusCls, fmt:fmtMoney},
+      {label:"Usage %", val:r.usagePct, prevVal:prevRow?prevRow.usagePct:null, cls:statusCls, fmt:fmtPct},
+    ];
+    return `<div class="qcard${qd.isLatest?" current":""}">
+      <h3>${qd.label}${qd.isLatest ? ` <span class="pill">latest</span>` : ""} <span class="badge ${badgeClass(r.status)}" style="margin-left:8px;">${r.status}</span></h3>
+      <div class="qmetric-grid">
+        ${list.map(m=>`
+          <div class="qmetric">
+            <div class="qval ${m.cls}">${m.fmt(m.val)}</div>
+            <div class="qlbl">${m.label}</div>
+            ${prevRow ? deltaHtml(m.val, m.prevVal, m.fmt) : ""}
+          </div>`).join("")}
+      </div>
+    </div>`;
+  }
+
   // ---------- Quarter Compare: every quarter that has data in the selected year, side by side —
   // 4 quarters for a completed past year, fewer for the current year (only as many as have been
-  // tracked so far), driven by the Year selector. ----------
+  // tracked so far), driven by the Year selector. A Scope picker switches what's being compared:
+  // all brands pooled together (default), one client's own totals, or one specific brand's own
+  // totals, quarter over quarter. ----------
   function renderQuarterComparePage(){
     const tolerance = state.tolerance;
     const monthsInYear = state.data.months.filter(m=>m.year===state.year);
     const maxMonth = monthsInYear.length ? Math.max(...monthsInYear.map(m=>m.month)) : 0;
     const maxQuarter = maxMonth ? quarterOf(maxMonth) : 0;
 
+    const scope = state.qcScope || "all";
+    const entityNames = scope==="client" ? allClientGroupNames() : scope==="brand" ? allBrandNames() : [];
+    if(scope !== "all"){
+      if(!state.qcEntity || !entityNames.includes(state.qcEntity)) state.qcEntity = entityNames[0] || null;
+    }
+
     const quarters = [];
     for(let q=1; q<=maxQuarter; q++){
       const qMonths = monthsInQuarter(state.year, q).map(({year,month})=>getMonthEntry(year,month)).filter(Boolean);
       if(!qMonths.length) continue;
-      quarters.push({ quarter:q, label:`Q${q} ${state.year}`, stats: statsOf(aggregateBrands(qMonths, tolerance)) });
+      if(scope === "client"){
+        const row = state.qcEntity ? aggregateByClient(qMonths, tolerance).find(r=>r.name===state.qcEntity) : null;
+        quarters.push({ quarter:q, label:`Q${q} ${state.year}`, kind:"entity", row: row || {approved:0, actual:0, uoSpend:0, usagePct:null, status:"n/a"} });
+      } else if(scope === "brand"){
+        const row = state.qcEntity ? brandQuarterRow(qMonths, state.qcEntity, tolerance) : {approved:0, actual:0, uoSpend:0, usagePct:null, status:"n/a"};
+        quarters.push({ quarter:q, label:`Q${q} ${state.year}`, kind:"entity", row });
+      } else {
+        quarters.push({ quarter:q, label:`Q${q} ${state.year}`, kind:"stats", stats: statsOf(aggregateBrands(qMonths, tolerance)) });
+      }
     }
     if(quarters.length) quarters[quarters.length-1].isLatest = (state.year === (latestAvailableMonth()||{}).year);
 
@@ -1163,18 +1235,29 @@
       <div class="control-row">
         <span class="field-label">Year</span>
         <span id="qcYearSlot"></span>
+        <span class="field-label" style="margin-left:14px;">Scope</span>
+        <button class="pill-btn ${scope==="all"?"active":""}" data-qcscope="all">All Brands</button>
+        <button class="pill-btn ${scope==="client"?"active":""}" data-qcscope="client">By Client</button>
+        <button class="pill-btn ${scope==="brand"?"active":""}" data-qcscope="brand">By Brand</button>
+        ${scope!=="all" ? `<select id="qcEntitySelect">${entityNames.map(n=>`<option value="${n}" ${state.qcEntity===n?"selected":""}>${n}</option>`).join("")}</select>` : ""}
         <span class="period-pill">${quarters.length} quarter${quarters.length===1?"":"s"} tracked in ${state.year}</span>
       </div>
       ${quarters.length ? displayRows.filter(r=>r.length).map(rowQuarters => `
         <div class="quarters-grid">
           ${rowQuarters.map(qd=>{
             const i = quarters.indexOf(qd);
-            return renderQuarterCard(qd, i>0 ? quarters[i-1].stats : null);
+            return qd.kind==="entity"
+              ? renderQuarterEntityCard(qd, i>0 ? quarters[i-1].row : null)
+              : renderQuarterCard(qd, i>0 ? quarters[i-1].stats : null);
           }).join("")}
         </div>
       `).join("") : `<div class="empty">No data available for ${state.year} yet.</div>`}
     `;
     mount(yearWrap, "qcYearSlot");
+    const qcEntitySel = document.getElementById("qcEntitySelect");
+    if(qcEntitySel){
+      qcEntitySel.addEventListener("change", ()=>{ state.qcEntity = qcEntitySel.value; render(); });
+    }
   }
 
   // ---------- By Client: pick a client, browse it by year / month / week ----------
@@ -1243,7 +1326,7 @@
       return r ? {label:`${MONTH_NAMES[m.month]} ${m.year}`, ...r} : null;
     }).filter(Boolean);
 
-    const assigneeNames = (row && row.assignees && row.assignees.length) ? row.assignees.join(", ") : null;
+    const assigneeNames = (row && row.assignees && row.assignees.length) ? row.assignees.map(firstName).join(", ") : null;
     const hasBrands = !!(row && row.brands && row.brands.length > 1);
 
     // The brand filter only makes sense for the currently selected client/period — drop it if
@@ -1544,7 +1627,7 @@
         <thead><tr><th>Brand</th><th>Assignee</th><th class="num-cell">Approved</th><th class="num-cell">Actual</th><th class="num-cell">U/O Spend $</th><th class="num-cell">Usage %</th><th>Status</th></tr></thead>
         <tbody>${g.brands.map(b=>`<tr>
           <td class="brand-name">${b.name}</td>
-          <td>${(b.assignees && b.assignees.length) ? b.assignees.join(", ") : "—"}</td>
+          <td>${(b.assignees && b.assignees.length) ? b.assignees.map(firstName).join(", ") : "—"}</td>
           <td class="num-cell">${fmtMoney(b.approved)}</td>
           <td class="num-cell">${fmtMoney(b.actual)}</td>
           <td class="num-cell"><span class="${b.status==="Overspend"?"text-over":b.status==="Underspend"?"text-under":"text-target"}">${fmtMoney(b.uoSpend)}</span></td>
@@ -1722,6 +1805,14 @@
       state.assigneeGroupBy = assigneeGroupByBtn.dataset.assigneegroupby;
       state.drillAssignee = null;
       state.drillClient = null;
+      render();
+      return;
+    }
+
+    const qcScopeBtn = e.target.closest(".control-row button[data-qcscope]");
+    if(qcScopeBtn){
+      state.qcScope = qcScopeBtn.dataset.qcscope;
+      state.qcEntity = null;
       render();
       return;
     }
