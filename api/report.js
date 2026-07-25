@@ -64,6 +64,14 @@ const EXCLUDE_NAMES = new Set([
   "assets mobilization",
 ]);
 
+// Some tasks carry a stale/incorrect ClickUp assignee that doesn't actually work on that brand
+// (confirmed by Marianne). Strip these specific username(s) from these specific brand names only
+// -- this never touches ClickUp itself, just what the report displays.
+const ASSIGNEE_EXCLUSIONS = {
+  "Giraffe Creatives": new Set(["Kataka Mbunji", "Kataka"]),
+  "Desired Spaces": new Set(["Kataka Mbunji", "Kataka"]),
+};
+
 function normalizeName(raw) {
   const trimmed = raw.replace(/[‘’]/g, "'").trim();
   const key = trimmed.toLowerCase();
@@ -133,7 +141,9 @@ export default async function handler(req, res) {
           const weeks = WEEK_FIELDS.map((fid) => numField(cf, fid) || 0);
           const actual = weeks.reduce((a, b) => a + b, 0);
           const name = normalizeName(rawName);
-          const assignees = (t.assignees || []).map((a) => a.username).filter(Boolean);
+          let assignees = (t.assignees || []).map((a) => a.username).filter(Boolean);
+          const excl = ASSIGNEE_EXCLUSIONS[name];
+          if (excl) assignees = assignees.filter((a) => !excl.has(a));
           const client = clientOf(cf, name);
           const updatedAt = Number(t.date_updated) || 0;
           const existing = brandMap.get(name);
