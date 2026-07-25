@@ -394,6 +394,23 @@
 
   const MONTH_NAMES = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
 
+  // Each tracker month is split into 5 pacing weeks of ~7 calendar days each (Week 5 absorbs
+  // whatever's left at month end). Used to show a real date range (DD.MM.YY-DD.MM.YY) instead of
+  // the abstract "Week N" label.
+  function weekDateRange(year, month, week){
+    const lastDay = new Date(year, month, 0).getDate();
+    const start = Math.min((week-1)*7 + 1, lastDay);
+    const end = Math.min(week*7, lastDay);
+    const fmt = (d)=>{
+      const dt = new Date(year, month-1, d);
+      const dd = String(dt.getDate()).padStart(2,"0");
+      const mm = String(dt.getMonth()+1).padStart(2,"0");
+      const yy = String(dt.getFullYear()).slice(-2);
+      return `${dd}.${mm}.${yy}`;
+    };
+    return `${fmt(start)}-${fmt(end)}`;
+  }
+
   // Every Media Buying tracker list is named "<Month> <Year>_Tracker" — the calendar coverage is
   // known up front from the list names themselves, so the Year/Month/Week pickers don't need to
   // wait on the ClickUp fetch to populate. This mirrors LISTS in api/report.js.
@@ -815,7 +832,7 @@
       prevStats = statsOf(aggregateBrands(prevQMonths, tolerance));
       curQuarterLabel = `Q${q} ${state.year}`;
       prevLabel = `Q${pq.quarter} ${pq.year}`;
-      statLabel = `${MONTH_NAMES[state.month]} ${state.year} — through Week ${state.week}`;
+      statLabel = weekDateRange(state.year, state.month, state.week);
       approvedLabel = `Prorated Target (Wk ${state.week})`;
     }
 
@@ -1314,7 +1331,7 @@
     } else {
       const m = getMonthEntry(state.year, state.month);
       row = weekFn(m, state.week, tolerance).find(r=>r.name===entity);
-      label = `${MONTH_NAMES[state.month]} ${state.year} — through Week ${state.week}`;
+      label = weekDateRange(state.year, state.month, state.week);
       approvedLabel = `Prorated Target (Wk ${state.week})`;
     }
     // When a single brand is picked from the filter, the top snapshot should reflect that one
@@ -1451,7 +1468,7 @@
     const granularity = state.assigneeGranularity || "month";
     const week = state.assigneeWeek || 5;
     const rows = !monthEntry ? [] : (granularity==="week" ? weekBrands(monthEntry, week, tolerance) : aggregateBrands([monthEntry], tolerance));
-    const periodLabel = granularity==="week" ? `${MONTH_NAMES[am]} ${ay} — through Week ${week}` : `${MONTH_NAMES[am]} ${ay}`;
+    const periodLabel = granularity==="week" ? weekDateRange(ay, am, week) : `${MONTH_NAMES[am]} ${ay}`;
     const cumAvg = granularity==="week" ? null : cumulativeAvgUOSpend(ay, am);
     const overallStats = statsOf(rows);
 
