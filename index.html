@@ -1394,11 +1394,11 @@
     contentEl.innerHTML = `
       <div class="section-title" style="margin-top:2px">${state.clientBrandFilter ? state.clientBrandFilter : entity}${hasBrands ? ` <span class="pill">${state.clientBrandFilter ? `1 of ${row.brands.length} brands` : `${row.brands.length} brands`}</span>` : ""}${assigneeNames ? ` <span class="pill">Assigned to: ${assigneeNames}</span>` : ""}</div>
       <div class="control-row" id="clientControlRow">
-        <span class="field-label ${state.clientPeriod==="year"?"active":""}">Year</span>
+        <button class="pill-btn ${state.clientPeriod==="year"?"active":""}" data-clientperiod="year">Year</button>
         <span id="ccYearSlot"></span>
-        <span class="field-label ${state.clientPeriod==="month"?"active":""}">Month</span>
+        <button class="pill-btn ${state.clientPeriod==="month"?"active":""}" data-clientperiod="month">Month</button>
         <span id="ccMonthSlot"></span>
-        <span class="field-label ${state.clientPeriod==="week"?"active":""}">Week</span>
+        <button class="pill-btn ${state.clientPeriod==="week"?"active":""}" data-clientperiod="week">Week</button>
         <span id="ccWeekSlot"></span>
         <span class="field-label">Client</span>
         <span id="ccClientSlot"></span>
@@ -1809,6 +1809,13 @@
     const reportBtn = e.target.closest(".control-row button[data-reportperiod]");
     if(reportBtn){
       state.reportGranularity = reportBtn.dataset.reportperiod;
+      render();
+      return;
+    }
+
+    const clientPeriodBtn = e.target.closest(".control-row button[data-clientperiod]");
+    if(clientPeriodBtn){
+      state.clientPeriod = clientPeriodBtn.dataset.clientperiod;
       render();
       return;
     }
