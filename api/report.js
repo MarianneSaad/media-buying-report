@@ -57,11 +57,7 @@ const ASSIGNEE_EXCLUSIONS = {
       "Desired Spaces": new Set(["Kataka Mbunji", "Kataka"]),
 };
 
-function normalizeName(raw) {
-      const trimmed = raw.replace(/[‘’]/g, "'").trim();
-      const key = trimmed.toLowerCase();
-      return NAME_ALIASES[key] || trimmed;
-}
+function normalizeName(raw) { const trimmed = raw.replace(/[‘’]/g, "'").trim(); const key = trimmed.toLowerCase(); return NAME_ALIASES[key] || trimmed; }
 
 function numField(customFields, id) {
       const f = customFields.find((c) => c.id === id);
