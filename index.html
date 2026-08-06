@@ -417,7 +417,7 @@
   const PERIODS = [];
   for(let m=3;m<=12;m++) PERIODS.push({year:2024, month:m});
   for(let m=1;m<=12;m++) PERIODS.push({year:2025, month:m});
-  for(let m=1;m<=7;m++) PERIODS.push({year:2026, month:m});
+  for(let m=1;m<=12;m++) PERIODS.push({year:2026, month:m}); for(let y=2027;y<=2030;y++){ for(let m=1;m<=12;m++) PERIODS.push({year:y, month:m}); }
 
   function fmtMoney(n){
     if(n === null || n === undefined || !isFinite(n)) return "—";
